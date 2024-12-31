@@ -5,6 +5,7 @@ import flipSound from './assets/flip.mp3';
 import './App.css';
 
 function App() {
+    const [username, setUsername] = useState(''); // New state for username
     const [isMotionActive, setIsMotionActive] = useState(false);
     const [play, { stop, isPlaying, load }] = useSound(flipSound, {
         onplay: () => {
@@ -84,6 +85,10 @@ function App() {
     }, [score, highScore]);
 
     const handleStartGame = () => {
+        if (!username.trim()) {
+            alert('Please enter a username.');
+            return;
+        }
         if (!isDeviceMotionSupported) {
             alert('Device motion API is not supported on this device.');
             return;
@@ -112,6 +117,25 @@ function App() {
         setScoreMultiplier(1);
         setFlipStreak(0);
         motionRef.current = { ...motionRef.current, initialBias: { x: 0, y: 0, z: 0 } };
+    };
+
+    const resetGame = () => {
+        setIsGameActive(false);
+        setIsMotionActive(false);
+        setIsGameOver(false);
+        setIsPaused(false);
+        setTimeLeft(10);
+        setScore(0);
+        setScoreMultiplier(1);
+        setFlipStreak(0);
+        setLastFlipMagnitude(0);
+        setScoreAnimation(null);
+        setIsFlippingAnimation(false);
+        motionRef.current = {
+            previousAcceleration: null,
+            isFlipping: false,
+            initialBias: { x: 0, y: 0, z: 0 },
+        };
     };
 
     const handleStop = () => {
@@ -240,7 +264,7 @@ function App() {
     }, [browser, coolDownDuration, isCoolingDown, isGameActive, isPaused, play, scoreMultiplier, sensitivity, flipStreak]);
 
     const particlesInit = useCallback(async engine => {
-        await loadFull(engine);
+        // await loadFull(engine); // Assuming you have this import if you're using particles
     }, []);
 
     const particlesLoaded = useCallback(async container => {
@@ -272,9 +296,18 @@ function App() {
             </div>
 
             {!isGameActive && !isGameOver && (
-                <button onClick={handleStartGame} className="action-button start-button">
-                    <FaPlay /> Start Game
-                </button>
+                <div className="input-group"> {/* Added a container for input and button */}
+                    <input
+                        type="text"
+                        placeholder="Enter your username"
+                        value={username}
+                        onChange={(e) => setUsername(e.target.value)}
+                        className="username-input"
+                    />
+                    <button onClick={handleStartGame} className="action-button start-button">
+                        <FaPlay /> Start Game
+                    </button>
+                </div>
             )}
 
             {isGameActive && (
@@ -287,11 +320,11 @@ function App() {
             )}
 
             {isGameOver && (
-                <div className="game-over-overlay">
+                <div>
                     <h2>Game Over!</h2>
                     <p>Your Score: {score}</p>
-                    <button onClick={handleStartGame} className="action-button start-button">
-                        <FaRedo /> Play Again
+                    <button onClick={resetGame} className="action-button start-button">
+                        <FaRedo /> Try Again
                     </button>
                 </div>
             )}

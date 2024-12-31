@@ -256,7 +256,7 @@ h1 {
 
 .tutorial-content p {
   margin-bottom: 15px;
-  line-height: 1.6; 
+  line-height: 1.6;
 }
 
 .flip-animation {
@@ -276,4 +276,26 @@ h1 {
   to {
       opacity: 1;
   }
+}
+
+/* New styles for username input */
+.input-group {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-bottom: 20px;
+}
+
+.username-input {
+    padding: 12px;
+    border-radius: 8px;
+    border: 1px solid #ccc;
+    font-size: 1rem;
+    color: #333;
+}
+
+.username-input:focus {
+    outline: none;
+    border-color: #61dafb;
+    box-shadow: 0 0 5px rgba(97, 218, 251, 0.5);
 }
