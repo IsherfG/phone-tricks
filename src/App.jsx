@@ -1,5 +1,6 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import useSound from 'use-sound';
+import { FaPlay, FaRedo, FaPause, FaQuestionCircle } from 'react-icons/fa';
 import flipSound from './assets/flip.mp3';
 import './App.css';
 
@@ -27,6 +28,12 @@ function App() {
     const [isGameActive, setIsGameActive] = useState(false);
     const [timeLeft, setTimeLeft] = useState(10);
     const [scoreAnimation, setScoreAnimation] = useState(null);
+    const [isGameOver, setIsGameOver] = useState(false);
+    const [isPaused, setIsPaused] = useState(false);
+    const [showTutorial, setShowTutorial] = useState(false);
+    const [scoreMultiplier, setScoreMultiplier] = useState(1);
+    const [flipStreak, setFlipStreak] = useState(0);
+    const [isFlippingAnimation, setIsFlippingAnimation] = useState(false);
 
     useEffect(() => {
         setIsDeviceMotionSupported(typeof DeviceMotionEvent !== 'undefined');
@@ -42,7 +49,7 @@ function App() {
 
     useEffect(() => {
         let eventListener = null;
-        if (isMotionActive && isGameActive) {
+        if (isMotionActive && isGameActive && !isPaused) {
             eventListener = (event) => {
                 handleDeviceMotion(event);
             };
@@ -53,20 +60,21 @@ function App() {
                 window.removeEventListener('devicemotion', eventListener);
             }
         };
-    }, [isMotionActive, isGameActive, browser]);
+    }, [isMotionActive, isGameActive, browser, isPaused]);
 
     useEffect(() => {
         let timer;
-        if (isGameActive && timeLeft > 0) {
+        if (isGameActive && timeLeft > 0 && !isPaused) {
             timer = setInterval(() => {
                 setTimeLeft(prevTime => prevTime - 1);
             }, 1000);
-        } else if (timeLeft === 0) {
+        } else if (timeLeft === 0 && isGameActive) {
             setIsGameActive(false);
             setIsMotionActive(false);
+            setIsGameOver(true);
         }
         return () => clearInterval(timer);
-    }, [isGameActive, timeLeft]);
+    }, [isGameActive, timeLeft, isPaused]);
 
     useEffect(() => {
         if (score > highScore) {
@@ -84,34 +92,43 @@ function App() {
             DeviceMotionEvent.requestPermission()
                 .then(permissionState => {
                     if (permissionState === 'granted') {
-                        setIsMotionActive(true);
-                        setIsGameActive(true);
-                        setTimeLeft(10);
-                        setScore(0);
-                        motionRef.current = { ...motionRef.current, initialBias: { x: 0, y: 0, z: 0 } };
+                        startGame();
                     } else {
                         alert('Device motion permission not granted.');
                     }
                 })
                 .catch(console.error);
         } else {
-            setIsMotionActive(true);
-            setIsGameActive(true);
-            setTimeLeft(10);
-            setScore(0);
-            motionRef.current = { ...motionRef.current, initialBias: { x: 0, y: 0, z: 0 } };
+            startGame();
         }
+    };
+
+    const startGame = () => {
+        setIsMotionActive(true);
+        setIsGameActive(true);
+        setIsGameOver(false);
+        setTimeLeft(10);
+        setScore(0);
+        setScoreMultiplier(1);
+        setFlipStreak(0);
+        motionRef.current = { ...motionRef.current, initialBias: { x: 0, y: 0, z: 0 } };
     };
 
     const handleStop = () => {
         if (isPlaying) stop();
         setIsMotionActive(false);
         setIsGameActive(false);
+        setIsPaused(false);
+        setIsGameOver(false);
         setTimeLeft(10);
     };
 
-    const handleDeviceMotion = (event) => {
-        if (isCoolingDown || !isGameActive) {
+    const handlePause = () => {
+        setIsPaused(!isPaused);
+    };
+
+    const handleDeviceMotion = useCallback((event) => {
+        if (isCoolingDown || !isGameActive || isPaused) {
             return;
         }
 
@@ -187,8 +204,13 @@ function App() {
             if (magnitude > minFlipMagnitude && !isDominantAxisMotion) {
                 motionRef.current = { ...motionRef.current, isFlipping: true };
                 play();
+                setIsFlippingAnimation(true);
+                setTimeout(() => setIsFlippingAnimation(false), 200); // Short flip animation
 
-                const scoreIncrement = Math.round(magnitude);
+                setFlipStreak(prevStreak => prevStreak + 1);
+                setScoreMultiplier(Math.min(3, Math.floor(flipStreak / 3) + 1));
+
+                const scoreIncrement = Math.round(magnitude * scoreMultiplier);
                 setScore(prevScore => {
                     setScoreAnimation({
                         value: scoreIncrement,
@@ -198,20 +220,36 @@ function App() {
                 });
                 setLastFlipMagnitude(magnitude);
 
+                if (typeof navigator.vibrate === 'function') {
+                    navigator.vibrate(50); // Small vibration on flip
+                }
+
                 setIsCoolingDown(true);
                 setTimeout(() => {
                     motionRef.current = { ...motionRef.current, isFlipping: false };
                     setIsCoolingDown(false);
                 }, coolDownDuration);
+            } else {
+                setFlipStreak(0); // Reset streak if not a valid flip
+                setScoreMultiplier(1);
             }
         }
 
         setMotionData({ x, y, z });
         motionRef.current = { ...motionRef.current, previousAcceleration: { x, y, z } };
-    };
+    }, [browser, coolDownDuration, isCoolingDown, isGameActive, isPaused, play, scoreMultiplier, sensitivity, flipStreak]);
+
+    const particlesInit = useCallback(async engine => {
+        await loadFull(engine);
+    }, []);
+
+    const particlesLoaded = useCallback(async container => {
+        // console.log(container);
+    }, []);
 
     return (
         <div className="app-container">
+
             <div className="header">
                 <div>
                     <h1>Flip It!</h1>
@@ -228,17 +266,37 @@ function App() {
                             <span className="score-animation">+{scoreAnimation.value}</span>
                         )}
                     </span>
+                    {scoreMultiplier > 1 && <span className="multiplier">x{scoreMultiplier}</span>}
+                    {flipStreak > 2 && <span className="streak">🔥</span>}
                 </div>
             </div>
 
-            {!isGameActive ? (
+            {!isGameActive && !isGameOver && (
                 <button onClick={handleStartGame} className="action-button start-button">
-                    Start Game
+                    <FaPlay /> Start Game
                 </button>
-            ) : (
-                <div className="timer">Time Left: {timeLeft}s</div>
             )}
+
             {isGameActive && (
+                <div className="game-controls">
+                    <div className="timer">Time Left: {timeLeft}s</div>
+                    <button onClick={handlePause} className="action-button">
+                        {isPaused ? <FaPlay /> : <FaPause />} {isPaused ? 'Resume' : 'Pause'}
+                    </button>
+                </div>
+            )}
+
+            {isGameOver && (
+                <div className="game-over-overlay">
+                    <h2>Game Over!</h2>
+                    <p>Your Score: {score}</p>
+                    <button onClick={handleStartGame} className="action-button start-button">
+                        <FaRedo /> Play Again
+                    </button>
+                </div>
+            )}
+
+            {isGameActive && !isPaused && (
                 <div className="motion-data">
                     <p>X: {motionData.x?.toFixed(2) ?? 0}</p>
                     <p>Y: {motionData.y?.toFixed(2) ?? 0}</p>
@@ -248,7 +306,7 @@ function App() {
             <div className="last-flip">
                 {lastFlipMagnitude > 0 && <p>Last Flip Magnitude: {lastFlipMagnitude.toFixed(2)}</p>}
             </div>
-             {!isGameActive && (
+             {!isGameActive && !isGameOver && (
                 <div className="sensitivity-control">
                     <label htmlFor="sensitivity">Sensitivity:</label>
                     <input
@@ -263,6 +321,28 @@ function App() {
                     <span className="sensitivity-value">{sensitivity.toFixed(2)}</span>
                 </div>
             )}
+
+            {!isGameActive && !isGameOver && (
+                <button onClick={() => setShowTutorial(true)} className="action-button help-button">
+                    <FaQuestionCircle /> How to Play
+                </button>
+            )}
+
+            {showTutorial && (
+                <div className="tutorial-modal">
+                    <div className="tutorial-content">
+                        <h2>How to Play Flip It!</h2>
+                        <p>Flip your device in the air to score points.</p>
+                        <p>The faster and cleaner the flip, the more points you get.</p>
+                        <p>Build up a streak of successful flips for a score multiplier!</p>
+                        <button onClick={() => setShowTutorial(false)} className="action-button">
+                            Got it!
+                        </button>
+                    </div>
+                </div>
+            )}
+
+             {isFlippingAnimation && <div className="flip-animation"></div>}
         </div>
     );
 }

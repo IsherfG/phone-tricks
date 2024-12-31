@@ -1,6 +1,12 @@
 /* App.css */
-body {
+html, body {
   margin: 0;
+  padding: 0;
+  overflow-x: hidden;
+  position: relative; /* For positioning the particle background */
+}
+
+body {
   font-family: 'Arial', sans-serif;
   background-color: #282c34;
   color: #f8f8f2;
@@ -8,41 +14,58 @@ body {
   justify-content: center;
   align-items: center;
   min-height: 100vh;
-  padding: 20px; /* Add some padding around the edges */
-  box-sizing: border-box; /* Include padding in width/height */
+  box-sizing: border-box;
 }
 
 .app-container {
   background: linear-gradient(145deg, #333333, #292929);
-  border-radius: 20px; /* More rounded corners for mobile */
+  border-radius: 20px;
   padding: 30px;
   text-align: center;
   box-shadow: 10px 10px 20px #1c1c1c, -10px -10px 20px #3a3a3a;
-  width: 100%; /* Take full width of the parent */
-  max-width: 450px; /* Limit maximum width for larger phones/tablets */
-  margin: auto; /* Center the container */
+  width: 100%;
+  max-width: 450px;
+  margin-left: auto;
+  margin-right: auto;
+  box-sizing: border-box;
+  position: relative; /* For stacking content above particles */
+  z-index: 2; /* Ensure content is above particles */
+  overflow: hidden; /* Clip any overflowing content within the container */
+}
+
+.particles-bg {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 1;
 }
 
 h1 {
   margin-bottom: 10px;
   color: #61dafb;
   text-shadow: 2px 2px 4px #000000;
-  font-size: 2em; /* Slightly smaller font for mobile */
+  font-size: 2em;
 }
 
 .header {
   display: flex;
-  flex-direction: column; /* Stack header elements on mobile */
-  align-items: center; /* Center items horizontally */
+  flex-direction: column;
+  align-items: center;
   margin-bottom: 20px;
 }
 
 .score-container,
 .high-score-container {
-  font-size: 1.1rem; /* Slightly smaller font for mobile */
+  font-size: 1.1rem;
   color: #eee;
   text-shadow: 1px 1px 2px #000000;
-  margin-bottom: 5px; /* Add spacing between score elements */
+  margin-bottom: 5px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
 }
 
 .score {
@@ -52,6 +75,29 @@ h1 {
   position: relative;
   overflow: hidden;
   display: inline-block;
+}
+
+.multiplier {
+  font-size: 0.8em;
+  color: #ffff00;
+  margin-left: 5px;
+  animation: pulse 1s infinite alternate;
+}
+
+.streak {
+  font-size: 1.2em;
+  margin-left: 5px;
+  animation: bounce 0.5s infinite alternate;
+}
+
+@keyframes pulse {
+  from { transform: scale(0.95); }
+  to { transform: scale(1.05); }
+}
+
+@keyframes bounce {
+  from { transform: translateY(0); }
+  to { transform: translateY(-5px); }
 }
 
 .score.animate .score-animation {
@@ -70,19 +116,28 @@ h1 {
 }
 
 .action-button {
-  padding: 14px 28px; /* Make buttons more touch-friendly */
+  padding: 14px 28px;
   border: none;
-  border-radius: 10px; /* More rounded buttons */
+  border-radius: 10px;
   cursor: pointer;
-  font-size: 1.1rem; /* Adjust font size */
+  font-size: 1.1rem;
   transition: transform 0.1s ease, box-shadow 0.1s ease;
   margin: 10px 0;
   font-weight: bold;
   background-color: #61dafb;
   color: #282c34;
   box-shadow: 0 3px 5px rgba(0, 0, 0, 0.3);
-  width: 100%; /* Make buttons take full available width */
-  box-sizing: border-box; /* Ensure padding doesn't add to width */
+  width: 100%;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.action-button.help-button {
+  background-color: #f0ad4e;
+  color: #fff;
 }
 
 .action-button:hover {
@@ -117,7 +172,7 @@ h1 {
 .sensitivity-control {
   margin-top: 25px;
   display: flex;
-  flex-direction: column; /* Stack label and input on mobile */
+  flex-direction: column;
   align-items: center;
   gap: 10px;
 }
@@ -128,7 +183,7 @@ h1 {
 }
 
 .sensitivity-control input[type="range"] {
-  width: 100%; /* Make slider take full available width */
+  width: 100%;
 }
 
 .sensitivity-value {
@@ -137,9 +192,88 @@ h1 {
 }
 
 .timer {
-  font-size: 1.8rem; /* Make timer more prominent on mobile */
+  font-size: 1.8rem;
   font-weight: bold;
   color: #ffcc00;
-  margin-bottom: 25px;
+  margin-bottom: 15px;
   text-shadow: 2px 2px 4px #000000;
+}
+
+.game-controls {
+  margin-bottom: 20px;
+}
+
+.game-over-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.8);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  z-index: 10;
+}
+
+.game-over-overlay h2 {
+  color: #ff4d4d;
+  font-size: 2.5em;
+  margin-bottom: 10px;
+}
+
+.game-over-overlay p {
+  font-size: 1.2em;
+  margin-bottom: 20px;
+}
+
+.tutorial-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.8);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+.tutorial-content {
+  background-color: #333;
+  padding: 30px;
+  border-radius: 15px;
+  text-align: left;
+  max-width: 80%;
+}
+
+.tutorial-content h2 {
+  color: #61dafb;
+  margin-bottom: 20px;
+}
+
+.tutorial-content p {
+  margin-bottom: 15px;
+  line-height: 1.6; 
+}
+
+.flip-animation {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(255, 255, 255, 0.3); /* Example flash color */
+  opacity: 0;
+  animation: flash 0.2s ease-out forwards;
+  pointer-events: none;
+  z-index: 5;
+}
+
+@keyframes flash {
+  to {
+      opacity: 1;
+  }
 }
