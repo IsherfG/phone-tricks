@@ -89,3 +89,27 @@ background-color: #b02a37;
   font-size: 1.1rem;
   color: #999;
 }
+
+/* Existing CSS */
+
+.sensitivity-control {
+  margin-top: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+
+.sensitivity-control label {
+  color: #fff;
+  font-size: 1.1rem;
+}
+
+.sensitivity-control input[type="range"] {
+  width: 150px;
+}
+
+.sensitivity-value {
+  color: #00e676;
+  font-weight: bold;
+}

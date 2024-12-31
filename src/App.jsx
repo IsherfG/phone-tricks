@@ -20,20 +20,14 @@ function App() {
     const [isDeviceMotionSupported, setIsDeviceMotionSupported] = useState(false);
     const [score, setScore] = useState(0);
     const [lastFlipMagnitude, setLastFlipMagnitude] = useState(0);
+    const [sensitivity, setSensitivity] = useState(1); // Added sensitivity
+    const [isCoolingDown, setIsCoolingDown] = useState(false);
+    const coolDownDuration = 300; // Reduced cooldown
 
     useEffect(() => {
-        // Check if DeviceMotionEvent is supported
-        setIsDeviceMotionSupported(
-            typeof DeviceMotionEvent !== 'undefined'
-        );
-
-        // Get the browser info
+        setIsDeviceMotionSupported(typeof DeviceMotionEvent !== 'undefined');
         const userAgent = navigator.userAgent;
-        if (userAgent.includes('Firefox')) {
-            setBrowser('firefox');
-        } else {
-            setBrowser('chrome');
-        }
+        setBrowser(userAgent.includes('Firefox') ? 'firefox' : 'chrome');
     }, []);
 
     useEffect(() => {
@@ -44,7 +38,6 @@ function App() {
             };
             window.addEventListener('devicemotion', eventListener);
         }
-
         return () => {
             if (eventListener) {
                 window.removeEventListener('devicemotion', eventListener);
@@ -53,35 +46,25 @@ function App() {
     }, [isMotionActive, browser]);
 
     const handleStart = () => {
-      console.log("handleStart function called!");
         if (isPlaying) stop();
-
         if (!isDeviceMotionSupported) {
             alert('Device motion API is not supported on this device.');
             return;
         }
-
-        // Request permission for iOS 13+ and some other browsers
         if (typeof DeviceMotionEvent.requestPermission === 'function') {
             DeviceMotionEvent.requestPermission()
                 .then(permissionState => {
                     if (permissionState === 'granted') {
                         setIsMotionActive(true);
                         motionRef.current = { ...motionRef.current, initialBias: { x: 0, y: 0, z: 0 } };
-                        console.log("Device motion permission granted!");
                     } else {
                         alert('Device motion permission not granted.');
-                        console.log("Device motion permission denied.");
                     }
                 })
-                .catch(error => {
-                    console.error("Error requesting device motion permission:", error);
-                });
+                .catch(console.error);
         } else {
-            // No permission request needed or not supported, just start
             setIsMotionActive(true);
             motionRef.current = { ...motionRef.current, initialBias: { x: 0, y: 0, z: 0 } };
-            console.log("Device motion permission request not needed or supported.");
         }
     };
 
@@ -90,38 +73,43 @@ function App() {
         setIsMotionActive(false);
         setScore(0);
         setLastFlipMagnitude(0);
-        motionRef.current = {
-            previousAcceleration: null,
-            isFlipping: false,
-            initialBias: { x: 0, y: 0, z: 0 },
-        };
+        motionRef.current = { previousAcceleration: null, isFlipping: false, initialBias: { x: 0, y: 0, z: 0 } };
     };
 
     const handleDeviceMotion = (event) => {
-        let x, y, z;
+        if (isCoolingDown) {
+            return;
+        }
 
-        // Helper function to safely get acceleration data
-        const getAcceleration = (evt) => {
-            return {
-                x: evt.acceleration?.x || evt.accelerationIncludingGravity?.x || 0,
-                y: evt.acceleration?.y || evt.accelerationIncludingGravity?.y || 0,
-                z: evt.acceleration?.z || evt.accelerationIncludingGravity?.z || 0,
-            };
-        };
+        let accelerationData;
+        if (browser === 'chrome') {
+            accelerationData = event.acceleration;
+        } else if (browser === 'firefox') {
+            accelerationData = event.accelerationIncludingGravity;
+        }
 
-        const accelerationData = getAcceleration(event);
-        x = accelerationData.x;
-        y = accelerationData.y;
-        z = accelerationData.z;
-
-        if (!x && !y && !z) {
+        if (!accelerationData || (!accelerationData.x && !accelerationData.y && !accelerationData.z)) {
             console.error("No valid acceleration data available.");
             setMotionData({ x: 0, y: 0, z: 0 });
             return;
         }
 
-        // Handle Firefox's acceleration
-        if (browser === 'firefox' && event.acceleration) {
+        let { x, y, z } = accelerationData;
+
+        // If firefox, handle gravity
+        if (browser === 'firefox' && event.accelerationIncludingGravity) {
+            const gravity = 9.81;
+            const norm = Math.sqrt(
+                Math.pow(event.accelerationIncludingGravity.x, 2) +
+                Math.pow(event.accelerationIncludingGravity.y, 2) +
+                Math.pow(event.accelerationIncludingGravity.z, 2)
+            );
+            if (norm > 0) {
+                x = accelerationData.x - (event.accelerationIncludingGravity.x / norm) * gravity;
+                y = accelerationData.y - (event.accelerationIncludingGravity.y / norm) * gravity;
+                z = accelerationData.z - (event.accelerationIncludingGravity.z / norm) * gravity;
+            }
+        } else if (browser === 'chrome' && event.acceleration) {
             x = event.acceleration.x;
             y = event.acceleration.y;
             z = event.acceleration.z;
@@ -139,13 +127,14 @@ function App() {
             return;
         }
 
-        const thresholdX = 0.7;
-        const thresholdY = 0.7;
-        const thresholdZ = 0.7;
+        const baseThreshold = 8; // Adjusted base threshold
+        const thresholdX = baseThreshold * sensitivity;
+        const thresholdY = baseThreshold * sensitivity;
+        const thresholdZ = baseThreshold * sensitivity;
 
-        const deltaX = x - previousAcceleration.x;
-        const deltaY = y - previousAcceleration.y;
-        const deltaZ = z - previousAcceleration.z;
+        const deltaX = (x - initialBias.x) - (previousAcceleration.x - initialBias.x);
+        const deltaY = (y - initialBias.y) - (previousAcceleration.y - initialBias.y);
+        const deltaZ = (z - initialBias.z) - (previousAcceleration.z - initialBias.z);
 
         const isFastMotion =
             Math.abs(deltaX) > thresholdX ||
@@ -158,13 +147,14 @@ function App() {
 
             const magnitude = Math.sqrt(deltaX * deltaX + deltaY * deltaY + deltaZ * deltaZ);
             setLastFlipMagnitude(magnitude);
-
-            const scoreIncrement = Math.round(magnitude * 10);
+            const scoreIncrement = Math.round(magnitude);
             setScore(prevScore => prevScore + scoreIncrement);
 
+            setIsCoolingDown(true);
             setTimeout(() => {
                 motionRef.current = { ...motionRef.current, isFlipping: false };
-            }, 500);
+                setIsCoolingDown(false);
+            }, coolDownDuration);
         }
 
         setMotionData({ x, y, z });
@@ -186,9 +176,24 @@ function App() {
                     Start Motion Detection
                 </button>
             ) : (
-                <button onClick={handleStop} className="action-button stop-button">
-                    Stop Motion Detection
-                </button>
+                <div>
+                    <button onClick={handleStop} className="action-button stop-button">
+                        Stop Motion Detection
+                    </button>
+                    <div className="sensitivity-control">
+                        <label htmlFor="sensitivity">Sensitivity:</label>
+                        <input
+                            type="range"
+                            id="sensitivity"
+                            min="0.1"
+                            max="2"
+                            step="0.05"
+                            value={sensitivity}
+                            onChange={(e) => setSensitivity(parseFloat(e.target.value))}
+                        />
+                        <span className="sensitivity-value">{sensitivity.toFixed(2)}</span>
+                    </div>
+                </div>
             )}
             <div className="motion-data">
                 <p>X: {motionData.x?.toFixed(2) ?? 0}</p>
