@@ -2,53 +2,56 @@
 body {
   margin: 0;
   font-family: 'Arial', sans-serif;
-  background-color: #282c34; /* A cool dark background */
-  color: #f8f8f2; /* Light, readable text */
+  background-color: #282c34;
+  color: #f8f8f2;
   display: flex;
   justify-content: center;
   align-items: center;
   min-height: 100vh;
-  overflow: hidden; /* Prevent scrollbars */
+  padding: 20px; /* Add some padding around the edges */
+  box-sizing: border-box; /* Include padding in width/height */
 }
 
 .app-container {
   background: linear-gradient(145deg, #333333, #292929);
-  border-radius: 15px;
-  padding: 40px;
+  border-radius: 20px; /* More rounded corners for mobile */
+  padding: 30px;
   text-align: center;
   box-shadow: 10px 10px 20px #1c1c1c, -10px -10px 20px #3a3a3a;
-  width: 90%;
-  max-width: 500px;
+  width: 100%; /* Take full width of the parent */
+  max-width: 450px; /* Limit maximum width for larger phones/tablets */
+  margin: auto; /* Center the container */
 }
 
 h1 {
   margin-bottom: 10px;
-  color: #61dafb; /* A vibrant accent color */
+  color: #61dafb;
   text-shadow: 2px 2px 4px #000000;
-  font-size: 2.5em;
+  font-size: 2em; /* Slightly smaller font for mobile */
 }
 
 .header {
   display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  margin-bottom: 30px;
+  flex-direction: column; /* Stack header elements on mobile */
+  align-items: center; /* Center items horizontally */
+  margin-bottom: 20px;
 }
 
 .score-container,
 .high-score-container {
-  font-size: 1.2rem;
+  font-size: 1.1rem; /* Slightly smaller font for mobile */
   color: #eee;
   text-shadow: 1px 1px 2px #000000;
+  margin-bottom: 5px; /* Add spacing between score elements */
 }
 
 .score {
   font-weight: bold;
-  color: #00ff99; /* A bright green for the score */
+  color: #00ff99;
   margin-left: 5px;
   position: relative;
-  overflow: hidden; /* Clip the animation */
-  display: inline-block; /* Needed for animation positioning */
+  overflow: hidden;
+  display: inline-block;
 }
 
 .score.animate .score-animation {
@@ -56,8 +59,8 @@ h1 {
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  font-size: 0.8em;
-  color: #ffff00; /* Yellow for the increment */
+  font-size: 0.7em;
+  color: #ffff00;
   animation: scoreIncrement 1s forwards ease-out;
 }
 
@@ -67,54 +70,56 @@ h1 {
 }
 
 .action-button {
-  padding: 12px 24px;
+  padding: 14px 28px; /* Make buttons more touch-friendly */
   border: none;
-  border-radius: 8px;
+  border-radius: 10px; /* More rounded buttons */
   cursor: pointer;
-  font-size: 1rem;
+  font-size: 1.1rem; /* Adjust font size */
   transition: transform 0.1s ease, box-shadow 0.1s ease;
   margin: 10px 0;
   font-weight: bold;
   background-color: #61dafb;
   color: #282c34;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 3px 5px rgba(0, 0, 0, 0.3);
+  width: 100%; /* Make buttons take full available width */
+  box-sizing: border-box; /* Ensure padding doesn't add to width */
 }
 
 .action-button:hover {
   transform: translateY(-2px);
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 5px 7px rgba(0, 0, 0, 0.3);
 }
 
 .action-button:active {
   transform: translateY(0);
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 3px 5px rgba(0, 0, 0, 0.3);
 }
 
 .motion-data {
-  margin-top: 30px;
-  font-size: 0.9rem;
+  margin-top: 20px;
+  font-size: 1rem;
   color: #ccc;
   background-color: rgba(0, 0, 0, 0.1);
-  border-radius: 8px;
+  border-radius: 10px;
   padding: 15px;
 }
 
 .motion-data p {
-  margin: 5px 0;
+  margin: 8px 0;
 }
 
 .last-flip {
-  margin-top: 25px;
-  font-size: 0.9rem;
+  margin-top: 20px;
+  font-size: 1rem;
   color: #aaa;
 }
 
 .sensitivity-control {
-  margin-top: 30px;
+  margin-top: 25px;
   display: flex;
+  flex-direction: column; /* Stack label and input on mobile */
   align-items: center;
-  justify-content: center;
-  gap: 15px;
+  gap: 10px;
 }
 
 .sensitivity-control label {
@@ -123,7 +128,7 @@ h1 {
 }
 
 .sensitivity-control input[type="range"] {
-  width: 180px;
+  width: 100%; /* Make slider take full available width */
 }
 
 .sensitivity-value {
@@ -132,9 +137,9 @@ h1 {
 }
 
 .timer {
-  font-size: 1.5rem;
+  font-size: 1.8rem; /* Make timer more prominent on mobile */
   font-weight: bold;
-  color: #ffcc00; /* A bright yellow for the timer */
-  margin-bottom: 20px;
+  color: #ffcc00;
+  margin-bottom: 25px;
   text-shadow: 2px 2px 4px #000000;
 }

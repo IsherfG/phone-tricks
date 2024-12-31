@@ -156,7 +156,7 @@ function App() {
         }
 
         if (initialBias.x === 0 && initialBias.y === 0 && initialBias.z === 0) {
-            motionRef.current = { ...motionRef.current, initialBias: { x, y, z } };
+            motionRef.current = { ...motionRef.current, initialBias: { x, y: 0, z: 0 } };
             return;
         }
 
@@ -236,12 +236,7 @@ function App() {
                     Start Game
                 </button>
             ) : (
-                <div>
-                    <div className="timer">Time Left: {timeLeft}s</div>
-                    {/* <button onClick={handleStop} className="action-button stop-button">
-                        Stop Game
-                    </button> */}
-                </div>
+                <div className="timer">Time Left: {timeLeft}s</div>
             )}
             {isGameActive && (
                 <div className="motion-data">
