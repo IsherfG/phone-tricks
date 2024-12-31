@@ -19,12 +19,14 @@ function App() {
     const [browser, setBrowser] = useState('');
     const [permissionGranted, setPermissionGranted] = useState(false);
     const [isDeviceMotionSupported, setIsDeviceMotionSupported] = useState(false);
+    const [score, setScore] = useState(0);
+    const [lastFlipMagnitude, setLastFlipMagnitude] = useState(0); // store the magnitude of last flip
 
     useEffect(() => {
         // Check if DeviceMotionEvent is supported
-        if (typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function') {
-            setIsDeviceMotionSupported(true);
-        }
+        setIsDeviceMotionSupported(
+            typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function'
+        );
 
         // Get the browser info
         const userAgent = navigator.userAgent;
@@ -56,6 +58,7 @@ function App() {
         if (browser === 'chrome' && isDeviceMotionSupported) {
             try {
                 const permissionStatus = await DeviceMotionEvent.requestPermission();
+                console.log("Permission Status:", permissionStatus);
                 if (permissionStatus === 'granted') {
                     setPermissionGranted(true);
                     setIsMotionActive(true);
@@ -64,6 +67,7 @@ function App() {
                 }
             } catch (error) {
                 console.error('Error requesting motion permission:', error);
+                alert('Error requesting motion permission. See console for details.');
             }
         } else if (browser === 'firefox') {
             setIsMotionActive(true);
@@ -75,7 +79,10 @@ function App() {
     const handleStop = () => {
         if (isPlaying) stop();
         setIsMotionActive(false);
+        setScore(0); // Reset score when stopping
+        setLastFlipMagnitude(0); // Reset lastFlipMagnitude
     };
+
 
     const handleDeviceMotion = (event) => {
         // get the acceleration data using fallback
@@ -94,8 +101,12 @@ function App() {
             return;
         }
 
-        // Log the raw data
-        console.log('Raw acceleration data: ', { x, y, z }, event);
+
+        if (browser === 'chrome') {
+            console.log("Chrome Motion Event:", event);
+            console.log("Chrome Acceleration:", event.acceleration);
+            console.log("Chrome Acceleration Including Gravity:", event.accelerationIncludingGravity);
+        }
 
         // If firefox we need to handle data differently
         if (browser === 'firefox' && event.accelerationIncludingGravity) {
@@ -120,14 +131,31 @@ function App() {
         const thresholdY = 10;
         const thresholdZ = 10;
 
+
+        const deltaX = (x - initialBias.x) - (previousAcceleration.x - initialBias.x);
+        const deltaY = (y - initialBias.y) - (previousAcceleration.y - initialBias.y);
+        const deltaZ = (z - initialBias.z) - (previousAcceleration.z - initialBias.z);
+
+
         const isFastMotion =
-            Math.abs((x - initialBias.x) - (previousAcceleration.x - initialBias.x)) > thresholdX ||
-            Math.abs((y - initialBias.y) - (previousAcceleration.y - initialBias.y)) > thresholdY ||
-            Math.abs((z - initialBias.z) - (previousAcceleration.z - initialBias.z)) > thresholdZ;
+            Math.abs(deltaX) > thresholdX ||
+            Math.abs(deltaY) > thresholdY ||
+            Math.abs(deltaZ) > thresholdZ;
+
 
         if (isFastMotion && !isFlipping) {
             motionRef.current = { ...motionRef.current, isFlipping: true };
             play();
+
+            // Calculate the magnitude of the flip
+             const magnitude = Math.sqrt(deltaX * deltaX + deltaY * deltaY + deltaZ * deltaZ);
+            setLastFlipMagnitude(magnitude);
+
+             // Add to score based on magnitude
+             const scoreIncrement = Math.round(magnitude); // Scale or round as needed
+            setScore(prevScore => prevScore + scoreIncrement);
+
+
             setTimeout(() => {
                 motionRef.current = { ...motionRef.current, isFlipping: false };
             }, 500);
@@ -139,21 +167,32 @@ function App() {
 
     return (
         <div className="app-container">
-            <h1>Motion Sound Trigger</h1>
+            <div className="header">
+                <h1>Flip It!</h1>
+                <div className="score-container">
+                    <span>Score: </span>
+                    <span className="score">{score}</span>
+                </div>
+            </div>
+
             {!isMotionActive ? (
-                <button onClick={handleStart} className="action-button">
+                <button onClick={handleStart} className="action-button start-button">
                     Start Motion Detection
                 </button>
             ) : (
-                <button onClick={handleStop} className="action-button">
+                <button onClick={handleStop} className="action-button stop-button">
                     Stop Motion Detection
                 </button>
             )}
-            <div className="motion-data">
+             <div className="motion-data">
                 <p>X: {motionData.x?.toFixed(2) ?? 0}</p>
                 <p>Y: {motionData.y?.toFixed(2) ?? 0}</p>
                 <p>Z: {motionData.z?.toFixed(2) ?? 0}</p>
             </div>
+        <div className="last-flip">
+             {lastFlipMagnitude > 0 && <p>Last Flip Magnitude: {lastFlipMagnitude.toFixed(2)}</p>}
+        </div>
+
         </div>
     );
 }
