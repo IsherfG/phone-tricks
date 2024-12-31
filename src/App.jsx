@@ -20,9 +20,10 @@ function App() {
     const [isDeviceMotionSupported, setIsDeviceMotionSupported] = useState(false);
     const [score, setScore] = useState(0);
     const [lastFlipMagnitude, setLastFlipMagnitude] = useState(0);
-    const [sensitivity, setSensitivity] = useState(1); // Added sensitivity
+    const [sensitivity, setSensitivity] = useState(1);
     const [isCoolingDown, setIsCoolingDown] = useState(false);
-    const coolDownDuration = 300; // Reduced cooldown
+    const coolDownDuration = 300;
+    const [motionThresholdTime, setMotionThresholdTime] = useState(null); // For dead zone
 
     useEffect(() => {
         setIsDeviceMotionSupported(typeof DeviceMotionEvent !== 'undefined');
@@ -74,6 +75,7 @@ function App() {
         setScore(0);
         setLastFlipMagnitude(0);
         motionRef.current = { previousAcceleration: null, isFlipping: false, initialBias: { x: 0, y: 0, z: 0 } };
+        setMotionThresholdTime(null); // Reset dead zone timer
     };
 
     const handleDeviceMotion = (event) => {
@@ -96,7 +98,6 @@ function App() {
 
         let { x, y, z } = accelerationData;
 
-        // If firefox, handle gravity
         if (browser === 'firefox' && event.accelerationIncludingGravity) {
             const gravity = 9.81;
             const norm = Math.sqrt(
@@ -127,7 +128,7 @@ function App() {
             return;
         }
 
-        const baseThreshold = 8; // Adjusted base threshold
+        const baseThreshold = browser === 'chrome' ? 12 : 8; // Increased base threshold for Chrome
         const thresholdX = baseThreshold * sensitivity;
         const thresholdY = baseThreshold * sensitivity;
         const thresholdZ = baseThreshold * sensitivity;
@@ -141,7 +142,19 @@ function App() {
             Math.abs(deltaY) > thresholdY ||
             Math.abs(deltaZ) > thresholdZ;
 
-        if (isFastMotion && !isFlipping) {
+        // Implement a short "dead zone" to prevent immediate triggering on Chrome
+        const deadZoneDuration = 100; // milliseconds
+        const isThresholdExceeded = isFastMotion;
+
+        if (isThresholdExceeded && !motionThresholdTime) {
+            setMotionThresholdTime(Date.now());
+        } else if (!isThresholdExceeded) {
+            setMotionThresholdTime(null);
+        }
+
+        const isPastDeadZone = motionThresholdTime && (Date.now() - motionThresholdTime >= deadZoneDuration);
+
+        if (isPastDeadZone && !isFlipping) {
             motionRef.current = { ...motionRef.current, isFlipping: true };
             play();
 
