@@ -19,20 +19,30 @@ function App() {
     const [browser, setBrowser] = useState('');
     const [isDeviceMotionSupported, setIsDeviceMotionSupported] = useState(false);
     const [score, setScore] = useState(0);
+    const [highScore, setHighScore] = useState(0);
     const [lastFlipMagnitude, setLastFlipMagnitude] = useState(0);
     const [sensitivity, setSensitivity] = useState(1);
     const [isCoolingDown, setIsCoolingDown] = useState(false);
     const coolDownDuration = 300;
+    const [isGameActive, setIsGameActive] = useState(false);
+    const [timeLeft, setTimeLeft] = useState(10);
+    const [scoreAnimation, setScoreAnimation] = useState(null);
 
     useEffect(() => {
         setIsDeviceMotionSupported(typeof DeviceMotionEvent !== 'undefined');
         const userAgent = navigator.userAgent;
         setBrowser(userAgent.includes('Firefox') ? 'firefox' : 'chrome');
+
+        // Load high score from local storage
+        const storedHighScore = localStorage.getItem('highScore');
+        if (storedHighScore) {
+            setHighScore(parseInt(storedHighScore, 10));
+        }
     }, []);
 
     useEffect(() => {
         let eventListener = null;
-        if (isMotionActive) {
+        if (isMotionActive && isGameActive) {
             eventListener = (event) => {
                 handleDeviceMotion(event);
             };
@@ -43,10 +53,29 @@ function App() {
                 window.removeEventListener('devicemotion', eventListener);
             }
         };
-    }, [isMotionActive, browser]);
+    }, [isMotionActive, isGameActive, browser]);
 
-    const handleStart = () => {
-        if (isPlaying) stop();
+    useEffect(() => {
+        let timer;
+        if (isGameActive && timeLeft > 0) {
+            timer = setInterval(() => {
+                setTimeLeft(prevTime => prevTime - 1);
+            }, 1000);
+        } else if (timeLeft === 0) {
+            setIsGameActive(false);
+            setIsMotionActive(false);
+        }
+        return () => clearInterval(timer);
+    }, [isGameActive, timeLeft]);
+
+    useEffect(() => {
+        if (score > highScore) {
+            setHighScore(score);
+            localStorage.setItem('highScore', score);
+        }
+    }, [score, highScore]);
+
+    const handleStartGame = () => {
         if (!isDeviceMotionSupported) {
             alert('Device motion API is not supported on this device.');
             return;
@@ -56,6 +85,9 @@ function App() {
                 .then(permissionState => {
                     if (permissionState === 'granted') {
                         setIsMotionActive(true);
+                        setIsGameActive(true);
+                        setTimeLeft(10);
+                        setScore(0);
                         motionRef.current = { ...motionRef.current, initialBias: { x: 0, y: 0, z: 0 } };
                     } else {
                         alert('Device motion permission not granted.');
@@ -64,6 +96,9 @@ function App() {
                 .catch(console.error);
         } else {
             setIsMotionActive(true);
+            setIsGameActive(true);
+            setTimeLeft(10);
+            setScore(0);
             motionRef.current = { ...motionRef.current, initialBias: { x: 0, y: 0, z: 0 } };
         }
     };
@@ -71,13 +106,12 @@ function App() {
     const handleStop = () => {
         if (isPlaying) stop();
         setIsMotionActive(false);
-        setScore(0);
-        setLastFlipMagnitude(0);
-        motionRef.current = { previousAcceleration: null, isFlipping: false, initialBias: { x: 0, y: 0, z: 0 } };
+        setIsGameActive(false);
+        setTimeLeft(10);
     };
 
     const handleDeviceMotion = (event) => {
-        if (isCoolingDown) {
+        if (isCoolingDown || !isGameActive) {
             return;
         }
 
@@ -145,7 +179,6 @@ function App() {
         if (isFastMotion && !isFlipping) {
             const magnitude = Math.sqrt(deltaX * deltaX + deltaY * deltaY + deltaZ * deltaZ);
 
-            // Enhanced check for Chrome to avoid over-sensitivity to simple up/down
             const isDominantAxisMotion = browser === 'chrome' &&
                 (Math.abs(deltaX) > magnitude * 0.8 ||
                  Math.abs(deltaY) > magnitude * 0.8 ||
@@ -155,9 +188,15 @@ function App() {
                 motionRef.current = { ...motionRef.current, isFlipping: true };
                 play();
 
-                setLastFlipMagnitude(magnitude);
                 const scoreIncrement = Math.round(magnitude);
-                setScore(prevScore => prevScore + scoreIncrement);
+                setScore(prevScore => {
+                    setScoreAnimation({
+                        value: scoreIncrement,
+                        timestamp: Date.now()
+                    });
+                    return prevScore + scoreIncrement;
+                });
+                setLastFlipMagnitude(magnitude);
 
                 setIsCoolingDown(true);
                 setTimeout(() => {
@@ -174,45 +213,61 @@ function App() {
     return (
         <div className="app-container">
             <div className="header">
-                <h1>Flip It!</h1>
+                <div>
+                    <h1>Flip It!</h1>
+                    <div className="high-score-container">
+                        <span>High Score: </span>
+                        <span className="score">{highScore}</span>
+                    </div>
+                </div>
                 <div className="score-container">
                     <span>Score: </span>
-                    <span className="score">{score}</span>
+                    <span className={`score ${scoreAnimation ? 'animate' : ''}`}>
+                        {score}
+                        {scoreAnimation && (
+                            <span className="score-animation">+{scoreAnimation.value}</span>
+                        )}
+                    </span>
                 </div>
             </div>
 
-            {!isMotionActive ? (
-                <button onClick={handleStart} className="action-button start-button">
-                    Start Motion Detection
+            {!isGameActive ? (
+                <button onClick={handleStartGame} className="action-button start-button">
+                    Start Game
                 </button>
             ) : (
                 <div>
-                    <button onClick={handleStop} className="action-button stop-button">
-                        Stop Motion Detection
-                    </button>
-                    <div className="sensitivity-control">
-                        <label htmlFor="sensitivity">Sensitivity:</label>
-                        <input
-                            type="range"
-                            id="sensitivity"
-                            min="0.1"
-                            max="2"
-                            step="0.05"
-                            value={sensitivity}
-                            onChange={(e) => setSensitivity(parseFloat(e.target.value))}
-                        />
-                        <span className="sensitivity-value">{sensitivity.toFixed(2)}</span>
-                    </div>
+                    <div className="timer">Time Left: {timeLeft}s</div>
+                    {/* <button onClick={handleStop} className="action-button stop-button">
+                        Stop Game
+                    </button> */}
                 </div>
             )}
-            <div className="motion-data">
-                <p>X: {motionData.x?.toFixed(2) ?? 0}</p>
-                <p>Y: {motionData.y?.toFixed(2) ?? 0}</p>
-                <p>Z: {motionData.z?.toFixed(2) ?? 0}</p>
-            </div>
+            {isGameActive && (
+                <div className="motion-data">
+                    <p>X: {motionData.x?.toFixed(2) ?? 0}</p>
+                    <p>Y: {motionData.y?.toFixed(2) ?? 0}</p>
+                    <p>Z: {motionData.z?.toFixed(2) ?? 0}</p>
+                </div>
+            )}
             <div className="last-flip">
                 {lastFlipMagnitude > 0 && <p>Last Flip Magnitude: {lastFlipMagnitude.toFixed(2)}</p>}
             </div>
+             {!isGameActive && (
+                <div className="sensitivity-control">
+                    <label htmlFor="sensitivity">Sensitivity:</label>
+                    <input
+                        type="range"
+                        id="sensitivity"
+                        min="0.1"
+                        max="2"
+                        step="0.05"
+                        value={sensitivity}
+                        onChange={(e) => setSensitivity(parseFloat(e.target.value))}
+                    />
+                    <span className="sensitivity-value">{sensitivity.toFixed(2)}</span>
+                </div>
+            )}
         </div>
     );
 }
