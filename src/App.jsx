@@ -123,59 +123,21 @@ function App() {
             setScoreboard(data);
         }
     };
+
     const saveScore = async () => {
-      const trimmedUsername = username.trim();
-      if (!trimmedUsername) {
-          console.error("Username is empty.");
-          return;
-      }
-  
-      try {
-          // Check if a score already exists for this username
-          const { data: existingScoreData, error: fetchError } = await supabase
-              .from('scores')
-              .select('score')
-              .eq('username', trimmedUsername)
-              .single(); // Use .single() to get a single record or null
-  
-          if (fetchError) {
-              console.error("Error fetching existing score:", fetchError);
-              return;
-          }
-  
-          if (existingScoreData) {
-              // A score exists, compare with the new score
-              if (score > existingScoreData.score) {
-                  // New score is higher, update the existing record
-                  const { data, error: updateError } = await supabase
-                      .from('scores')
-                      .update({ score: score, created_at: new Date() })
-                      .eq('username', trimmedUsername);
-  
-                  if (updateError) {
-                      console.error("Error updating score:", updateError);
-                  } else {
-                      console.log("Score updated successfully:", data);
-                  }
-              } else {
-                  console.log("New score is not higher than existing score. Not updating.");
-              }
-          } else {
-              // No existing score, insert a new record
-              const { data, error: insertError } = await supabase
-                  .from('scores')
-                  .insert([{ username: trimmedUsername, score: score, created_at: new Date() }]);
-  
-              if (insertError) {
-                  console.error("Error saving new score:", insertError);
-              } else {
-                  console.log("New score saved successfully:", data);
-              }
-          }
-      } catch (error) {
-          console.error("An unexpected error occurred:", error);
-      }
-  };
+        const { data, error } = await supabase
+            .from('scores')
+            .upsert(
+                [{ username: username.trim(), score: score, created_at: new Date() }],
+                { onConflict: 'username' }
+            );
+
+        if (error) {
+            console.error('Error saving or updating score:', error);
+        } else {
+            console.log('Score saved or updated successfully:', data);
+        }
+    };
 
     const handleStartGame = async () => {
         if (!username.trim()) {
@@ -328,7 +290,7 @@ function App() {
                 setLastFlipMagnitude(magnitude);
 
                 if (typeof navigator.vibrate === 'function') {
-                    navigator.vibrate(100);
+                    navigator.vibrate(50);
                 }
 
                 setIsCoolingDown(true);
