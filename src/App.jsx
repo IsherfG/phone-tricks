@@ -24,7 +24,6 @@ function App() {
         initialBias: { x: 0, y: 0, z: 0 },
     });
     const [motionData, setMotionData] = useState({ x: 0, y: 0, z: 0 });
-    const [browser, setBrowser] = useState('');
     const [isDeviceMotionSupported, setIsDeviceMotionSupported] = useState(false);
     const [score, setScore] = useState(0);
     const [highScore, setHighScore] = useState(0);
@@ -45,9 +44,7 @@ function App() {
 
     useEffect(() => {
         setIsDeviceMotionSupported(typeof DeviceMotionEvent !== 'undefined');
-        const userAgent = navigator.userAgent;
-        setBrowser(userAgent.includes('Firefox') ? 'firefox' : 'chrome');
-
+        // No longer need to set browser state here as we directly use navigator.userAgent in saveScore
         const storedHighScore = localStorage.getItem('highScore');
         if (storedHighScore) {
             setHighScore(parseInt(storedHighScore, 10));
@@ -67,7 +64,7 @@ function App() {
                 window.removeEventListener('devicemotion', eventListener);
             }
         };
-    }, [isMotionActive, isGameActive, browser]);
+    }, [isMotionActive, isGameActive]); // Removed browser dependency
 
     useEffect(() => {
         let timer;
@@ -112,7 +109,7 @@ function App() {
     const fetchScoreboard = async () => {
         const { data, error } = await supabase
             .from('scores')
-            .select('username, score, created_at')
+            .select('username, score, created_at, browser_user_agent')
             .order('score', { ascending: false })
             .limit(15);
 
@@ -130,9 +127,9 @@ function App() {
             return;
         }
 
-        const browserInfo = navigator.userAgent; // Get the browser's user agent string
+        const browserInfo = navigator.userAgent; // Get browser info directly
 
-        console.log("saveScore function called", { username: trimmedUsername, score, browser: browserInfo }); // Log the browser info
+        console.log("saveScore function called", { username: trimmedUsername, score, browser: browserInfo });
 
         const { data: existingScoreData, error: existingScoreError } = await supabase
             .from('scores')
@@ -152,13 +149,13 @@ function App() {
                 console.log("Current score:", score, "Existing score:", existingScoreData.score, "Updating score with browser info...");
                 const { data: updateData, error: updateError } = await supabase
                     .from('scores')
-                    .update({ score: score, created_at: new Date(), browser_user_agent: browserInfo }) // Include browserInfo
+                    .update({ score: score, created_at: new Date(), browser_user_agent: browserInfo })
                     .eq('username', trimmedUsername);
 
                 if (updateError) {
                     console.error("Error updating score:", updateError);
                 } else {
-                    console.log("Score updated successfully with browser info (no data returned by update)");
+                    console.log("Score updated successfully with browser info");
                 }
             } else {
                 console.log(`Current score ${score} is not higher than existing score ${existingScoreData.score} for user ${trimmedUsername}.`);
@@ -167,12 +164,12 @@ function App() {
             console.log("No existing score found, inserting new score with browser info.");
             const { error: insertError } = await supabase
                 .from('scores')
-                .insert([{ username: trimmedUsername, score: score, created_at: new Date(), browser_user_agent: browserInfo }]); // Include browserInfo
+                .insert([{ username: trimmedUsername, score: score, created_at: new Date(), browser_user_agent: browserInfo }]);
 
             if (insertError) {
                 console.error("Error saving new score:", insertError);
             } else {
-                console.log(`Saved new score for user ${trimmedUsername}: ${score} with browser info`);
+                console.log("Saved new score with browser info.");
             }
         }
     };
@@ -234,10 +231,17 @@ function App() {
         }
 
         let accelerationData;
-        if (browser === 'chrome') {
+        const userAgent = navigator.userAgent;
+        const isChrome = userAgent.includes('Chrome');
+        const isFirefox = userAgent.includes('Firefox');
+
+        if (isChrome) {
             accelerationData = event.acceleration;
-        } else if (browser === 'firefox') {
+        } else if (isFirefox) {
             accelerationData = event.accelerationIncludingGravity;
+        } else {
+            console.warn("Browser not recognized for device motion handling.");
+            return;
         }
 
         if (!accelerationData || (!accelerationData.x && !accelerationData.y && !accelerationData.z)) {
@@ -248,7 +252,7 @@ function App() {
 
         let { x, y, z } = accelerationData;
 
-        if (browser === 'firefox' && event.accelerationIncludingGravity) {
+        if (isFirefox && event.accelerationIncludingGravity) {
             const gravity = 9.81;
             const norm = Math.sqrt(
                 Math.pow(event.accelerationIncludingGravity.x, 2) +
@@ -260,7 +264,7 @@ function App() {
                 y = accelerationData.y - (event.accelerationIncludingGravity.y / norm) * gravity;
                 z = accelerationData.z - (event.accelerationIncludingGravity.z / norm) * gravity;
             }
-        } else if (browser === 'chrome' && event.acceleration) {
+        } else if (isChrome && event.acceleration) {
             x = event.acceleration.x;
             y = event.acceleration.y;
             z = event.acceleration.z;
@@ -280,7 +284,7 @@ function App() {
 
         const baseThresholdChrome = 10; // Increased threshold for Chrome
         const baseThresholdFirefox = 8;
-        const baseThreshold = browser === 'chrome' ? baseThresholdChrome : baseThresholdFirefox;
+        const baseThreshold = isChrome ? baseThresholdChrome : baseThresholdFirefox;
 
         const thresholdX = baseThreshold * sensitivity;
         const thresholdY = baseThreshold * sensitivity;
@@ -298,12 +302,12 @@ function App() {
         const minFlipMagnitude = 5;
         const dominantAxisThresholdChrome = 0.7; // More restrictive for Chrome
         const dominantAxisThresholdFirefox = 0.8;
-        const dominantAxisThreshold = browser === 'chrome' ? dominantAxisThresholdChrome : dominantAxisThresholdFirefox;
+        const dominantAxisThreshold = isChrome ? dominantAxisThresholdChrome : dominantAxisThresholdFirefox;
 
         if (isFastMotion && !isFlipping) {
             const magnitude = Math.sqrt(deltaX * deltaX + deltaY * deltaY + deltaZ * deltaZ);
 
-            const isDominantAxisMotion = browser === 'chrome' &&
+            const isDominantAxisMotion = isChrome &&
                 (Math.abs(deltaX) > magnitude * dominantAxisThreshold ||
                  Math.abs(deltaY) > magnitude * dominantAxisThreshold ||
                  Math.abs(deltaZ) > magnitude * dominantAxisThreshold);
@@ -344,7 +348,7 @@ function App() {
 
         setMotionData({ x, y, z });
         motionRef.current = { ...motionRef.current, previousAcceleration: { x, y, z } };
-    }, [browser, coolDownDuration, isCoolingDown, isGameActive, play, scoreMultiplier, sensitivity, flipStreak]);
+    }, [coolDownDuration, isCoolingDown, isGameActive, play, scoreMultiplier, sensitivity, flipStreak]);
 
     return (
         <div className="app-container">
@@ -407,6 +411,7 @@ function App() {
                                             <th>Username</th>
                                             <th>Score</th>
                                             <th>Time</th>
+                                            <th>Browser</th>
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -418,6 +423,7 @@ function App() {
                                                 <td>
                                                     {new Date(entry.created_at).toLocaleTimeString()}
                                                 </td>
+                                                <td>{entry.browser_user_agent}</td>
                                             </tr>
                                         ))}
                                     </tbody>
