@@ -101,7 +101,6 @@ function App() {
                     await fetchScoreboard();
                 } catch (error) {
                     console.error("Error updating scoreboard:", error);
-                    // Handle error, maybe show a message to the user
                 } finally {
                     setIsScoreboardLoading(false);
                 }
@@ -125,58 +124,70 @@ function App() {
     };
 
     const saveScore = async () => {
-      const trimmedUsername = username.trim();
-      if (!trimmedUsername) {
-          console.warn("Username is empty, skipping score save.");
-          return;
-      }
-  
-      console.log("saveScore function called", { username: trimmedUsername, score });
-  
-      const { data: existingScoreData, error: existingScoreError } = await supabase
-          .from('scores')
-          .select('score')
-          .eq('username', trimmedUsername)
-          .single();
-  
-      console.log("Existing score data:", existingScoreData, "Error:", existingScoreError);
-  
-      if (existingScoreError && existingScoreError.code !== 'PGRST116') {
-          console.error("Error checking for existing score:", existingScoreError);
-          return;
-      }
-  
-      if (existingScoreData) {
-          if (score > existingScoreData.score) {
-              console.log("Current score:", score, "Existing score:", existingScoreData.score, "Updating score...");
-              const { data: updateData, error: updateError } = await supabase
-                  .from('scores')
-                  .update({ score: score, created_at: new Date() })
-                  .eq('username', trimmedUsername);
-  
-              if (updateError) {
-                  console.error("Error updating score:", updateError);  // <---- ADD THIS LINE
-              } else {
-                  console.log("Score updated successfully:", updateData); // Optional: Log success data
-                  console.log(`Updated score for user ${trimmedUsername} to ${score}`);
-              }
-          } else {
-              console.log(`Current score ${score} is not higher than existing score ${existingScoreData.score} for user ${trimmedUsername}.`);
-          }
-      } else {
-          // No existing score, so insert a new one
-          console.log("No existing score found, inserting new score.");
-          const { error: insertError } = await supabase
-              .from('scores')
-              .insert([{ username: trimmedUsername, score: score, created_at: new Date() }]);
-  
-          if (insertError) {
-              console.error("Error saving new score:", insertError);
-          } else {
-              console.log(`Saved new score for user ${trimmedUsername}: ${score}`);
-          }
-      }
-  };
+        const trimmedUsername = username.trim();
+        if (!trimmedUsername) {
+            console.warn("Username is empty, skipping score save.");
+            return;
+        }
+
+        console.log("saveScore function called", { username: trimmedUsername, score });
+
+        const { data: existingScoreData, error: existingScoreError } = await supabase
+            .from('scores')
+            .select('score')
+            .eq('username', trimmedUsername)
+            .single();
+
+        console.log("Existing score data:", existingScoreData, "Error:", existingScoreError);
+
+        if (existingScoreError && existingScoreError.code !== 'PGRST116') {
+            console.error("Error checking for existing score:", existingScoreError);
+            return;
+        }
+
+        if (existingScoreData) {
+            if (score > existingScoreData.score) {
+                console.log("Current score:", score, "Existing score:", existingScoreData.score, "Updating score...");
+                const { data: updateData, error: updateError } = await supabase
+                    .from('scores')
+                    .update({ score: score, created_at: new Date() })
+                    .eq('username', trimmedUsername);
+
+                if (updateError) {
+                    console.error("Error updating score:", updateError);
+                } else {
+                    console.log("Score updated successfully (no data returned by update)");
+
+                    // Fetch the updated score to verify
+                    const { data: updatedScoreData, error: updatedScoreError } = await supabase
+                        .from('scores')
+                        .select('score')
+                        .eq('username', trimmedUsername)
+                        .single();
+
+                    if (updatedScoreError) {
+                        console.error("Error fetching updated score:", updatedScoreError);
+                    } else if (updatedScoreData) {
+                        console.log("Verified updated score:", updatedScoreData.score);
+                    }
+                }
+            } else {
+                console.log(`Current score ${score} is not higher than existing score ${existingScoreData.score} for user ${trimmedUsername}.`);
+            }
+        } else {
+            // No existing score, so insert a new one
+            console.log("No existing score found, inserting new score.");
+            const { error: insertError } = await supabase
+                .from('scores')
+                .insert([{ username: trimmedUsername, score: score, created_at: new Date() }]);
+
+            if (insertError) {
+                console.error("Error saving new score:", insertError);
+            } else {
+                console.log(`Saved new score for user ${trimmedUsername}: ${score}`);
+            }
+        }
+    };
 
     const handleStartGame = async () => {
         if (!username.trim()) {
