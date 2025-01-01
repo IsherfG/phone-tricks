@@ -3,9 +3,15 @@ import useSound from 'use-sound';
 import { FaPlay, FaRedo, FaPause, FaQuestionCircle } from 'react-icons/fa';
 import flipSound from './assets/flip.mp3';
 import './App.css';
+import { createClient } from '@supabase/supabase-js';
+
+// Initialize Supabase client
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
+const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 function App() {
-    const [username, setUsername] = useState(''); // New state for username
+    const [username, setUsername] = useState('');
     const [isMotionActive, setIsMotionActive] = useState(false);
     const [play, { stop, isPlaying, load }] = useSound(flipSound, {
         onplay: () => {
@@ -35,13 +41,14 @@ function App() {
     const [scoreMultiplier, setScoreMultiplier] = useState(1);
     const [flipStreak, setFlipStreak] = useState(0);
     const [isFlippingAnimation, setIsFlippingAnimation] = useState(false);
+    const [scoreboard, setScoreboard] = useState([]);
+    const [isScoreboardLoading, setIsScoreboardLoading] = useState(false);
 
     useEffect(() => {
         setIsDeviceMotionSupported(typeof DeviceMotionEvent !== 'undefined');
         const userAgent = navigator.userAgent;
         setBrowser(userAgent.includes('Firefox') ? 'firefox' : 'chrome');
 
-        // Load high score from local storage
         const storedHighScore = localStorage.getItem('highScore');
         if (storedHighScore) {
             setHighScore(parseInt(storedHighScore, 10));
@@ -84,7 +91,51 @@ function App() {
         }
     }, [score, highScore]);
 
-    const handleStartGame = () => {
+    useEffect(() => {
+        if (isGameOver) {
+            const updateScoreboard = async () => {
+                setIsScoreboardLoading(true);
+                try {
+                    if (username.trim()) {
+                        await saveScore();
+                    }
+                    await fetchScoreboard();
+                } catch (error) {
+                    console.error("Error updating scoreboard:", error);
+                    // Handle error, maybe show a message to the user
+                } finally {
+                    setIsScoreboardLoading(false);
+                }
+            };
+            updateScoreboard();
+        }
+    }, [isGameOver, username, score]);
+
+    const fetchScoreboard = async () => {
+        const { data, error } = await supabase
+            .from('scores')
+            .select('username, score, created_at')
+            .order('score', { ascending: false })
+            .limit(15);
+
+        if (error) {
+            console.error('Error fetching scoreboard:', error);
+        } else {
+            setScoreboard(data);
+        }
+    };
+
+    const saveScore = async () => {
+        const { data, error } = await supabase
+            .from('scores')
+            .insert([{ username: username.trim(), score: score, created_at: new Date() }]);
+
+        if (error) {
+            console.error('Error saving score:', error);
+        }
+    };
+
+    const handleStartGame = async () => {
         if (!username.trim()) {
             alert('Please enter a username.');
             return;
@@ -94,15 +145,12 @@ function App() {
             return;
         }
         if (typeof DeviceMotionEvent.requestPermission === 'function') {
-            DeviceMotionEvent.requestPermission()
-                .then(permissionState => {
-                    if (permissionState === 'granted') {
-                        startGame();
-                    } else {
-                        alert('Device motion permission not granted.');
-                    }
-                })
-                .catch(console.error);
+            const permissionState = await DeviceMotionEvent.requestPermission();
+            if (permissionState === 'granted') {
+                startGame();
+            } else {
+                alert('Device motion permission not granted.');
+            }
         } else {
             startGame();
         }
@@ -131,20 +179,12 @@ function App() {
         setLastFlipMagnitude(0);
         setScoreAnimation(null);
         setIsFlippingAnimation(false);
+        setScoreboard([]);
         motionRef.current = {
             previousAcceleration: null,
             isFlipping: false,
             initialBias: { x: 0, y: 0, z: 0 },
         };
-    };
-
-    const handleStop = () => {
-        if (isPlaying) stop();
-        setIsMotionActive(false);
-        setIsGameActive(false);
-        setIsPaused(false);
-        setIsGameOver(false);
-        setTimeLeft(10);
     };
 
     const handlePause = () => {
@@ -229,7 +269,7 @@ function App() {
                 motionRef.current = { ...motionRef.current, isFlipping: true };
                 play();
                 setIsFlippingAnimation(true);
-                setTimeout(() => setIsFlippingAnimation(false), 200); // Short flip animation
+                setTimeout(() => setIsFlippingAnimation(false), 200);
 
                 setFlipStreak(prevStreak => prevStreak + 1);
                 setScoreMultiplier(Math.min(3, Math.floor(flipStreak / 3) + 1));
@@ -245,7 +285,7 @@ function App() {
                 setLastFlipMagnitude(magnitude);
 
                 if (typeof navigator.vibrate === 'function') {
-                    navigator.vibrate(50); // Small vibration on flip
+                    navigator.vibrate(50);
                 }
 
                 setIsCoolingDown(true);
@@ -254,7 +294,7 @@ function App() {
                     setIsCoolingDown(false);
                 }, coolDownDuration);
             } else {
-                setFlipStreak(0); // Reset streak if not a valid flip
+                setFlipStreak(0);
                 setScoreMultiplier(1);
             }
         }
@@ -263,17 +303,8 @@ function App() {
         motionRef.current = { ...motionRef.current, previousAcceleration: { x, y, z } };
     }, [browser, coolDownDuration, isCoolingDown, isGameActive, isPaused, play, scoreMultiplier, sensitivity, flipStreak]);
 
-    const particlesInit = useCallback(async engine => {
-        // await loadFull(engine); // Assuming you have this import if you're using particles
-    }, []);
-
-    const particlesLoaded = useCallback(async container => {
-        // console.log(container);
-    }, []);
-
     return (
         <div className="app-container">
-
             <div className="header">
                 <div>
                     <h1>Flip It!</h1>
@@ -296,7 +327,7 @@ function App() {
             </div>
 
             {!isGameActive && !isGameOver && (
-                <div className="input-group"> {/* Added a container for input and button */}
+                <div className="input-group">
                     <input
                         type="text"
                         placeholder="Enter your username"
@@ -313,6 +344,11 @@ function App() {
             {isGameActive && (
                 <div className="game-controls">
                     <div className="timer">Time Left: {timeLeft}s</div>
+                </div>
+            )}
+
+            {!isGameActive && !isGameOver && (
+                <div className="game-controls">
                     <button onClick={handlePause} className="action-button">
                         {isPaused ? <FaPlay /> : <FaPause />} {isPaused ? 'Resume' : 'Pause'}
                     </button>
@@ -323,6 +359,39 @@ function App() {
                 <div>
                     <h2>Game Over!</h2>
                     <p>Your Score: {score}</p>
+                    <h3>Top Scores</h3>
+                    {isScoreboardLoading ? (
+                        <p>Loading scores...</p>
+                    ) : (
+                        <div className="scoreboard">
+                            {scoreboard.length > 0 ? (
+                                <table>
+                                    <thead>
+                                        <tr>
+                                            <th>Rank</th>
+                                            <th>Username</th>
+                                            <th>Score</th>
+                                            <th>Time</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {scoreboard.map((entry, index) => (
+                                            <tr key={index}>
+                                                <td>{index + 1}</td>
+                                                <td>{entry.username}</td>
+                                                <td>{entry.score}</td>
+                                                <td>
+                                                    {new Date(entry.created_at).toLocaleTimeString()}
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            ) : (
+                                <p>No scores yet!</p>
+                            )}
+                        </div>
+                    )}
                     <button onClick={resetGame} className="action-button start-button">
                         <FaRedo /> Try Again
                     </button>

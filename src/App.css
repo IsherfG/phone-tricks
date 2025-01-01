@@ -3,7 +3,7 @@ html, body {
   margin: 0;
   padding: 0;
   overflow-x: hidden;
-  position: relative; /* For positioning the particle background */
+  position: relative;
 }
 
 body {
@@ -28,9 +28,9 @@ body {
   margin-left: auto;
   margin-right: auto;
   box-sizing: border-box;
-  position: relative; /* For stacking content above particles */
-  z-index: 2; /* Ensure content is above particles */
-  overflow: hidden; /* Clip any overflowing content within the container */
+  position: relative;
+  z-index: 2;
+  overflow: hidden;
 }
 
 .particles-bg {
@@ -265,7 +265,7 @@ h1 {
   left: 0;
   width: 100%;
   height: 100%;
-  background-color: rgba(255, 255, 255, 0.3); /* Example flash color */
+  background-color: rgba(255, 255, 255, 0.3);
   opacity: 0;
   animation: flash 0.2s ease-out forwards;
   pointer-events: none;
@@ -298,4 +298,40 @@ h1 {
     outline: none;
     border-color: #61dafb;
     box-shadow: 0 0 5px rgba(97, 218, 251, 0.5);
+}
+
+/* Scoreboard Styles */
+.scoreboard {
+    margin-top: 20px;
+    overflow-x: auto;
+}
+
+.scoreboard table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 15px;
+}
+
+.scoreboard th,
+.scoreboard td {
+    padding: 8px;
+    text-align: left;
+}
+
+.scoreboard th {
+    background-color: #f2f2f2;
+    color: #333;
+    border-bottom: 1px solid #ddd;
+}
+
+.scoreboard tbody tr:nth-child(even) {
+    background-color: #333;
+}
+
+.scoreboard tbody tr {
+    border-top: 1px solid #ddd;
+}
+
+.scoreboard tbody tr:first-child {
+    border-top: none;
 }
