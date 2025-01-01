@@ -36,7 +36,6 @@ function App() {
     const [timeLeft, setTimeLeft] = useState(10);
     const [scoreAnimation, setScoreAnimation] = useState(null);
     const [isGameOver, setIsGameOver] = useState(false);
-    const [isPaused, setIsPaused] = useState(false); // Removed pause functionality
     const [showTutorial, setShowTutorial] = useState(false);
     const [scoreMultiplier, setScoreMultiplier] = useState(1);
     const [flipStreak, setFlipStreak] = useState(0);
@@ -57,7 +56,7 @@ function App() {
 
     useEffect(() => {
         let eventListener = null;
-        if (isMotionActive && isGameActive && !isPaused) {
+        if (isMotionActive && isGameActive) {
             eventListener = (event) => {
                 handleDeviceMotion(event);
             };
@@ -68,11 +67,11 @@ function App() {
                 window.removeEventListener('devicemotion', eventListener);
             }
         };
-    }, [isMotionActive, isGameActive, browser]); // Removed isPaused dependency
+    }, [isMotionActive, isGameActive, browser]);
 
     useEffect(() => {
         let timer;
-        if (isGameActive && timeLeft > 0 && !isPaused) {
+        if (isGameActive && timeLeft > 0) {
             timer = setInterval(() => {
                 setTimeLeft(prevTime => prevTime - 1);
             }, 1000);
@@ -82,7 +81,7 @@ function App() {
             setIsGameOver(true);
         }
         return () => clearInterval(timer);
-    }, [isGameActive, timeLeft]); // Removed isPaused dependency
+    }, [isGameActive, timeLeft]);
 
     useEffect(() => {
         if (score > highScore) {
@@ -126,12 +125,48 @@ function App() {
     };
 
     const saveScore = async () => {
-        const { data, error } = await supabase
-            .from('scores')
-            .insert([{ username: username.trim(), score: score, created_at: new Date() }]);
+        const trimmedUsername = username.trim();
+        if (!trimmedUsername) {
+            console.warn("Username is empty, skipping score save.");
+            return;
+        }
 
-        if (error) {
-            console.error('Error saving score:', error);
+        const { data: existingScoreData, error: existingScoreError } = await supabase
+            .from('scores')
+            .select('score')
+            .eq('username', trimmedUsername)
+            .single();
+
+        if (existingScoreError) {
+            console.error("Error checking for existing score:", existingScoreError);
+            return;
+        }
+
+        if (existingScoreData) {
+            if (score > existingScoreData.score) {
+                const { error: updateError } = await supabase
+                    .from('scores')
+                    .update({ score: score, created_at: new Date() })
+                    .eq('username', trimmedUsername);
+
+                if (updateError) {
+                    console.error("Error updating score:", updateError);
+                } else {
+                    console.log(`Updated score for user ${trimmedUsername} to ${score}`);
+                }
+            } else {
+                console.log(`Current score ${score} is not higher than existing score ${existingScoreData.score} for user ${trimmedUsername}.`);
+            }
+        } else {
+            const { error: insertError } = await supabase
+                .from('scores')
+                .insert([{ username: trimmedUsername, score: score, created_at: new Date() }]);
+
+            if (insertError) {
+                console.error("Error saving new score:", insertError);
+            } else {
+                console.log(`Saved new score for user ${trimmedUsername}: ${score}`);
+            }
         }
     };
 
@@ -186,12 +221,8 @@ function App() {
         };
     };
 
-    const handlePause = () => {
-        setIsPaused(!isPaused);
-    };
-
     const handleDeviceMotion = useCallback((event) => {
-        if (isCoolingDown || !isGameActive) { // Removed isPaused check
+        if (isCoolingDown || !isGameActive) {
             return;
         }
 
@@ -306,7 +337,7 @@ function App() {
 
         setMotionData({ x, y, z });
         motionRef.current = { ...motionRef.current, previousAcceleration: { x, y, z } };
-    }, [browser, coolDownDuration, isCoolingDown, isGameActive, play, scoreMultiplier, sensitivity, flipStreak]); // Removed isPaused dependency
+    }, [browser, coolDownDuration, isCoolingDown, isGameActive, play, scoreMultiplier, sensitivity, flipStreak]);
 
     return (
         <div className="app-container">
@@ -351,8 +382,6 @@ function App() {
                     <div className="timer">Time Left: {timeLeft}s</div>
                 </div>
             )}
-
-            {/* Removed pause button */}
 
             {isGameOver && (
                 <div>
