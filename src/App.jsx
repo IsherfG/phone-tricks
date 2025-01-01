@@ -95,9 +95,7 @@ function App() {
             const updateScoreboard = async () => {
                 setIsScoreboardLoading(true);
                 try {
-                    if (username.trim()) {
-                        await saveScore();
-                    }
+                    await saveScore();
                     await fetchScoreboard();
                 } catch (error) {
                     console.error("Error updating scoreboard:", error);
@@ -115,7 +113,7 @@ function App() {
             .from('scores')
             .select('username, score, created_at')
             .order('score', { ascending: false })
-            .limit(15);
+            .limit(50);
 
         if (error) {
             console.error('Error fetching scoreboard:', error);
@@ -123,59 +121,100 @@ function App() {
             setScoreboard(data);
         }
     };
+
     const saveScore = async () => {
-      const trimmedUsername = username.trim();
-      if (!trimmedUsername) {
-          console.error("Username is empty.");
-          return;
-      }
-  
-      try {
-          // Check if a score already exists for this username
-          const { data: existingScoreData, error: fetchError } = await supabase
-              .from('scores')
-              .select('score')
-              .eq('username', trimmedUsername)
-              .single(); // Use .single() to get a single record or null
-  
-          if (fetchError) {
-              console.error("Error fetching existing score:", fetchError);
-              return;
-          }
-  
-          if (existingScoreData) {
-              // A score exists, compare with the new score
-              if (score > existingScoreData.score) {
-                  // New score is higher, update the existing record
-                  const { data, error: updateError } = await supabase
-                      .from('scores')
-                      .update({ score: score, created_at: new Date() })
-                      .eq('username', trimmedUsername);
-  
-                  if (updateError) {
-                      console.error("Error updating score:", updateError);
-                  } else {
-                      console.log("Score updated successfully:", data);
-                  }
-              } else {
-                  console.log("New score is not higher than existing score. Not updating.");
-              }
-          } else {
-              // No existing score, insert a new record
-              const { data, error: insertError } = await supabase
-                  .from('scores')
-                  .insert([{ username: trimmedUsername, score: score, created_at: new Date() }]);
-  
-              if (insertError) {
-                  console.error("Error saving new score:", insertError);
-              } else {
-                  console.log("New score saved successfully:", data);
-              }
-          }
-      } catch (error) {
-          console.error("An unexpected error occurred:", error);
-      }
-  };
+        const trimmedUsername = username.trim();
+        if (!trimmedUsername) {
+            console.error("Username is empty.");
+            return;
+        }
+
+        try {
+            const { data: topScores, error: fetchError } = await supabase
+                .from('scores')
+                .select('score')
+                .order('score', { ascending: false })
+                .limit(50);
+
+            if (fetchError) {
+                console.error("Error fetching top scores:", fetchError);
+                return;
+            }
+
+            const isTop50 = topScores.length < 50 || score > topScores[topScores.length - 1]?.score;
+
+            if (isTop50) {
+                const { data: existingScoreData, error: fetchExistingError } = await supabase
+                    .from('scores')
+                    .select('id, score')
+                    .eq('username', trimmedUsername)
+                    .single();
+
+                if (fetchExistingError) {
+                    console.error("Error fetching existing score:", fetchExistingError);
+                    return;
+                }
+
+                if (existingScoreData) {
+                    if (score > existingScoreData.score) {
+                        const { error: updateError } = await supabase
+                            .from('scores')
+                            .update({ score: score, created_at: new Date() })
+                            .eq('id', existingScoreData.id);
+
+                        if (updateError) {
+                            console.error("Error updating score:", updateError);
+                        } else {
+                            console.log("Score updated successfully.");
+                        }
+                    } else {
+                        console.log("New score is not higher than existing score. Not updating.");
+                    }
+                } else {
+                    const { error: insertError } = await supabase
+                        .from('scores')
+                        .insert([{ username: trimmedUsername, score: score, created_at: new Date() }]);
+
+                    if (insertError) {
+                        console.error("Error saving new score:", insertError);
+                        return;
+                    }
+                    console.log("New score saved successfully.");
+
+                    // Check if we need to remove the lowest score
+                    const { count } = await supabase
+                        .from('scores')
+                        .select('*', { count: 'exact' });
+
+                    if (count > 50) {
+                        const { data: lowestScore } = await supabase
+                            .from('scores')
+                            .select('id')
+                            .order('score', { ascending: true })
+                            .limit(1)
+                            .single();
+
+                        if (lowestScore) {
+                            const { error: deleteError } = await supabase
+                                .from('scores')
+                                .delete()
+                                .eq('id', lowestScore.id);
+
+                            if (deleteError) {
+                                console.error("Error deleting lowest score:", deleteError);
+                            } else {
+                                console.log("Lowest score removed to maintain top 50.");
+                            }
+                        }
+                    }
+                }
+            } else {
+                console.log("Score is not within the top 50. Not saving.");
+            }
+        } catch (error) {
+            console.error("An unexpected error occurred:", error);
+        }
+    };
 
     const handleStartGame = async () => {
         if (!username.trim()) {
