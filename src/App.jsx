@@ -128,10 +128,15 @@ function App() {
     const saveScore = async () => {
         const { data, error } = await supabase
             .from('scores')
-            .insert([{ username: username.trim(), score: score, created_at: new Date() }]);
+            .upsert(
+                [{ username: username.trim(), score: score, created_at: new Date() }],
+                { onConflict: 'username' }
+            );
 
         if (error) {
-            console.error('Error saving score:', error);
+            console.error('Error saving or updating score:', error);
+        } else {
+            console.log('Score saved or updated successfully:', data);
         }
     };
 
