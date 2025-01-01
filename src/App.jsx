@@ -24,6 +24,7 @@ function App() {
         initialBias: { x: 0, y: 0, z: 0 },
     });
     const [motionData, setMotionData] = useState({ x: 0, y: 0, z: 0 });
+    const [browser, setBrowser] = useState('');
     const [isDeviceMotionSupported, setIsDeviceMotionSupported] = useState(false);
     const [score, setScore] = useState(0);
     const [highScore, setHighScore] = useState(0);
@@ -44,7 +45,9 @@ function App() {
 
     useEffect(() => {
         setIsDeviceMotionSupported(typeof DeviceMotionEvent !== 'undefined');
-        // No longer need to set browser state here as we directly use navigator.userAgent in saveScore
+        const userAgent = navigator.userAgent;
+        setBrowser(userAgent.includes('Firefox') ? 'firefox' : 'chrome');
+
         const storedHighScore = localStorage.getItem('highScore');
         if (storedHighScore) {
             setHighScore(parseInt(storedHighScore, 10));
@@ -64,7 +67,7 @@ function App() {
                 window.removeEventListener('devicemotion', eventListener);
             }
         };
-    }, [isMotionActive, isGameActive]); // Removed browser dependency
+    }, [isMotionActive, isGameActive, browser]);
 
     useEffect(() => {
         let timer;
@@ -109,7 +112,7 @@ function App() {
     const fetchScoreboard = async () => {
         const { data, error } = await supabase
             .from('scores')
-            .select('username, score, created_at, browser_user_agent')
+            .select('username, score, created_at')
             .order('score', { ascending: false })
             .limit(15);
 
@@ -127,9 +130,7 @@ function App() {
             return;
         }
 
-        const browserInfo = navigator.userAgent; // Get browser info directly
-
-        console.log("saveScore function called", { username: trimmedUsername, score, browser: browserInfo });
+        console.log("saveScore function called", { username: trimmedUsername, score });
 
         const { data: existingScoreData, error: existingScoreError } = await supabase
             .from('scores')
@@ -146,30 +147,44 @@ function App() {
 
         if (existingScoreData) {
             if (score > existingScoreData.score) {
-                console.log("Current score:", score, "Existing score:", existingScoreData.score, "Updating score with browser info...");
+                console.log("Current score:", score, "Existing score:", existingScoreData.score, "Updating score...");
                 const { data: updateData, error: updateError } = await supabase
                     .from('scores')
-                    .update({ score: score, created_at: new Date(), browser_user_agent: browserInfo })
+                    .update({ score: score, created_at: new Date() })
                     .eq('username', trimmedUsername);
 
                 if (updateError) {
                     console.error("Error updating score:", updateError);
                 } else {
-                    console.log("Score updated successfully with browser info");
+                    console.log("Score updated successfully (no data returned by update)");
+
+                    // Fetch the updated score to verify
+                    const { data: updatedScoreData, error: updatedScoreError } = await supabase
+                        .from('scores')
+                        .select('score')
+                        .eq('username', trimmedUsername)
+                        .single();
+
+                    if (updatedScoreError) {
+                        console.error("Error fetching updated score:", updatedScoreError);
+                    } else if (updatedScoreData) {
+                        console.log("Verified updated score:", updatedScoreData.score);
+                    }
                 }
             } else {
                 console.log(`Current score ${score} is not higher than existing score ${existingScoreData.score} for user ${trimmedUsername}.`);
             }
         } else {
-            console.log("No existing score found, inserting new score with browser info.");
+            // No existing score, so insert a new one
+            console.log("No existing score found, inserting new score.");
             const { error: insertError } = await supabase
                 .from('scores')
-                .insert([{ username: trimmedUsername, score: score, created_at: new Date(), browser_user_agent: browserInfo }]);
+                .insert([{ username: trimmedUsername, score: score, created_at: new Date() }]);
 
             if (insertError) {
                 console.error("Error saving new score:", insertError);
             } else {
-                console.log("Saved new score with browser info.");
+                console.log(`Saved new score for user ${trimmedUsername}: ${score}`);
             }
         }
     };
@@ -231,17 +246,10 @@ function App() {
         }
 
         let accelerationData;
-        const userAgent = navigator.userAgent;
-        const isChrome = userAgent.includes('Chrome');
-        const isFirefox = userAgent.includes('Firefox');
-
-        if (isChrome) {
+        if (browser === 'chrome') {
             accelerationData = event.acceleration;
-        } else if (isFirefox) {
+        } else if (browser === 'firefox') {
             accelerationData = event.accelerationIncludingGravity;
-        } else {
-            console.warn("Browser not recognized for device motion handling.");
-            return;
         }
 
         if (!accelerationData || (!accelerationData.x && !accelerationData.y && !accelerationData.z)) {
@@ -252,7 +260,7 @@ function App() {
 
         let { x, y, z } = accelerationData;
 
-        if (isFirefox && event.accelerationIncludingGravity) {
+        if (browser === 'firefox' && event.accelerationIncludingGravity) {
             const gravity = 9.81;
             const norm = Math.sqrt(
                 Math.pow(event.accelerationIncludingGravity.x, 2) +
@@ -264,7 +272,7 @@ function App() {
                 y = accelerationData.y - (event.accelerationIncludingGravity.y / norm) * gravity;
                 z = accelerationData.z - (event.accelerationIncludingGravity.z / norm) * gravity;
             }
-        } else if (isChrome && event.acceleration) {
+        } else if (browser === 'chrome' && event.acceleration) {
             x = event.acceleration.x;
             y = event.acceleration.y;
             z = event.acceleration.z;
@@ -284,7 +292,7 @@ function App() {
 
         const baseThresholdChrome = 10; // Increased threshold for Chrome
         const baseThresholdFirefox = 8;
-        const baseThreshold = isChrome ? baseThresholdChrome : baseThresholdFirefox;
+        const baseThreshold = browser === 'chrome' ? baseThresholdChrome : baseThresholdFirefox;
 
         const thresholdX = baseThreshold * sensitivity;
         const thresholdY = baseThreshold * sensitivity;
@@ -302,12 +310,12 @@ function App() {
         const minFlipMagnitude = 5;
         const dominantAxisThresholdChrome = 0.7; // More restrictive for Chrome
         const dominantAxisThresholdFirefox = 0.8;
-        const dominantAxisThreshold = isChrome ? dominantAxisThresholdChrome : dominantAxisThresholdFirefox;
+        const dominantAxisThreshold = browser === 'chrome' ? dominantAxisThresholdChrome : dominantAxisThresholdFirefox;
 
         if (isFastMotion && !isFlipping) {
             const magnitude = Math.sqrt(deltaX * deltaX + deltaY * deltaY + deltaZ * deltaZ);
 
-            const isDominantAxisMotion = isChrome &&
+            const isDominantAxisMotion = browser === 'chrome' &&
                 (Math.abs(deltaX) > magnitude * dominantAxisThreshold ||
                  Math.abs(deltaY) > magnitude * dominantAxisThreshold ||
                  Math.abs(deltaZ) > magnitude * dominantAxisThreshold);
@@ -348,7 +356,7 @@ function App() {
 
         setMotionData({ x, y, z });
         motionRef.current = { ...motionRef.current, previousAcceleration: { x, y, z } };
-    }, [coolDownDuration, isCoolingDown, isGameActive, play, scoreMultiplier, sensitivity, flipStreak]);
+    }, [browser, coolDownDuration, isCoolingDown, isGameActive, play, scoreMultiplier, sensitivity, flipStreak]);
 
     return (
         <div className="app-container">
@@ -411,7 +419,6 @@ function App() {
                                             <th>Username</th>
                                             <th>Score</th>
                                             <th>Time</th>
-                                            <th>Browser</th>
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -423,7 +430,6 @@ function App() {
                                                 <td>
                                                     {new Date(entry.created_at).toLocaleTimeString()}
                                                 </td>
-                                                <td>{entry.browser_user_agent}</td>
                                             </tr>
                                         ))}
                                     </tbody>
