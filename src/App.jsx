@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import useSound from 'use-sound';
-import { FaPlay, FaRedo, FaPause, FaQuestionCircle } from 'react-icons/fa';
+import { FaPlay, FaRedo, FaQuestionCircle } from 'react-icons/fa';
 import flipSound from './assets/flip.mp3';
 import './App.css';
 import { createClient } from '@supabase/supabase-js';
@@ -36,7 +36,7 @@ function App() {
     const [timeLeft, setTimeLeft] = useState(10);
     const [scoreAnimation, setScoreAnimation] = useState(null);
     const [isGameOver, setIsGameOver] = useState(false);
-    const [isPaused, setIsPaused] = useState(false);
+    const [isPaused, setIsPaused] = useState(false); // Removed pause functionality
     const [showTutorial, setShowTutorial] = useState(false);
     const [scoreMultiplier, setScoreMultiplier] = useState(1);
     const [flipStreak, setFlipStreak] = useState(0);
@@ -68,7 +68,7 @@ function App() {
                 window.removeEventListener('devicemotion', eventListener);
             }
         };
-    }, [isMotionActive, isGameActive, browser, isPaused]);
+    }, [isMotionActive, isGameActive, browser]); // Removed isPaused dependency
 
     useEffect(() => {
         let timer;
@@ -82,7 +82,7 @@ function App() {
             setIsGameOver(true);
         }
         return () => clearInterval(timer);
-    }, [isGameActive, timeLeft, isPaused]);
+    }, [isGameActive, timeLeft]); // Removed isPaused dependency
 
     useEffect(() => {
         if (score > highScore) {
@@ -171,7 +171,6 @@ function App() {
         setIsGameActive(false);
         setIsMotionActive(false);
         setIsGameOver(false);
-        setIsPaused(false);
         setTimeLeft(10);
         setScore(0);
         setScoreMultiplier(1);
@@ -192,7 +191,7 @@ function App() {
     };
 
     const handleDeviceMotion = useCallback((event) => {
-        if (isCoolingDown || !isGameActive || isPaused) {
+        if (isCoolingDown || !isGameActive) { // Removed isPaused check
             return;
         }
 
@@ -307,7 +306,7 @@ function App() {
 
         setMotionData({ x, y, z });
         motionRef.current = { ...motionRef.current, previousAcceleration: { x, y, z } };
-    }, [browser, coolDownDuration, isCoolingDown, isGameActive, isPaused, play, scoreMultiplier, sensitivity, flipStreak]);
+    }, [browser, coolDownDuration, isCoolingDown, isGameActive, play, scoreMultiplier, sensitivity, flipStreak]); // Removed isPaused dependency
 
     return (
         <div className="app-container">
@@ -353,13 +352,7 @@ function App() {
                 </div>
             )}
 
-            {!isGameActive && !isGameOver && (
-                <div className="game-controls">
-                    <button onClick={handlePause} className="action-button">
-                        {isPaused ? <FaPlay /> : <FaPause />} {isPaused ? 'Resume' : 'Pause'}
-                    </button>
-                </div>
-            )}
+            {/* Removed pause button */}
 
             {isGameOver && (
                 <div>
@@ -404,7 +397,7 @@ function App() {
                 </div>
             )}
 
-            {isGameActive && !isPaused && (
+            {isGameActive && (
                 <div className="motion-data">
                     <p>X: {motionData.x?.toFixed(2) ?? 0}</p>
                     <p>Y: {motionData.y?.toFixed(2) ?? 0}</p>
