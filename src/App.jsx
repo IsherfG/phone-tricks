@@ -130,7 +130,9 @@ function App() {
             return;
         }
 
-        console.log("saveScore function called", { username: trimmedUsername, score });
+        const browserInfo = navigator.userAgent; // Get the browser's user agent string
+
+        console.log("saveScore function called", { username: trimmedUsername, score, browser: browserInfo }); // Log the browser info
 
         const { data: existingScoreData, error: existingScoreError } = await supabase
             .from('scores')
@@ -147,44 +149,30 @@ function App() {
 
         if (existingScoreData) {
             if (score > existingScoreData.score) {
-                console.log("Current score:", score, "Existing score:", existingScoreData.score, "Updating score...");
+                console.log("Current score:", score, "Existing score:", existingScoreData.score, "Updating score with browser info...");
                 const { data: updateData, error: updateError } = await supabase
                     .from('scores')
-                    .update({ score: score, created_at: new Date() })
+                    .update({ score: score, created_at: new Date(), browser_user_agent: browserInfo }) // Include browserInfo
                     .eq('username', trimmedUsername);
 
                 if (updateError) {
                     console.error("Error updating score:", updateError);
                 } else {
-                    console.log("Score updated successfully (no data returned by update)");
-
-                    // Fetch the updated score to verify
-                    const { data: updatedScoreData, error: updatedScoreError } = await supabase
-                        .from('scores')
-                        .select('score')
-                        .eq('username', trimmedUsername)
-                        .single();
-
-                    if (updatedScoreError) {
-                        console.error("Error fetching updated score:", updatedScoreError);
-                    } else if (updatedScoreData) {
-                        console.log("Verified updated score:", updatedScoreData.score);
-                    }
+                    console.log("Score updated successfully with browser info (no data returned by update)");
                 }
             } else {
                 console.log(`Current score ${score} is not higher than existing score ${existingScoreData.score} for user ${trimmedUsername}.`);
             }
         } else {
-            // No existing score, so insert a new one
-            console.log("No existing score found, inserting new score.");
+            console.log("No existing score found, inserting new score with browser info.");
             const { error: insertError } = await supabase
                 .from('scores')
-                .insert([{ username: trimmedUsername, score: score, created_at: new Date() }]);
+                .insert([{ username: trimmedUsername, score: score, created_at: new Date(), browser_user_agent: browserInfo }]); // Include browserInfo
 
             if (insertError) {
                 console.error("Error saving new score:", insertError);
             } else {
-                console.log(`Saved new score for user ${trimmedUsername}: ${score}`);
+                console.log(`Saved new score for user ${trimmedUsername}: ${score} with browser info`);
             }
         }
     };
