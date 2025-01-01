@@ -3,7 +3,7 @@ import useSound from 'use-sound';
 import { FaPlay, FaRedo, FaPause, FaQuestionCircle } from 'react-icons/fa';
 import flipSound from './assets/flip.mp3';
 import './App.css';
-import { createClient } from '@supabase/supabase-js'; 
+import { createClient } from '@supabase/supabase-js';
 
 // Initialize Supabase client
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
@@ -190,7 +190,6 @@ function App() {
     const handlePause = () => {
         setIsPaused(!isPaused);
     };
-    
 
     const handleDeviceMotion = useCallback((event) => {
         if (isCoolingDown || !isGameActive || isPaused) {
@@ -242,7 +241,10 @@ function App() {
             return;
         }
 
-        const baseThreshold = 8;
+        const baseThresholdChrome = 10; // Increased threshold for Chrome
+        const baseThresholdFirefox = 8;
+        const baseThreshold = browser === 'chrome' ? baseThresholdChrome : baseThresholdFirefox;
+
         const thresholdX = baseThreshold * sensitivity;
         const thresholdY = baseThreshold * sensitivity;
         const thresholdZ = baseThreshold * sensitivity;
@@ -257,14 +259,17 @@ function App() {
             Math.abs(deltaZ) > thresholdZ;
 
         const minFlipMagnitude = 5;
+        const dominantAxisThresholdChrome = 0.7; // More restrictive for Chrome
+        const dominantAxisThresholdFirefox = 0.8;
+        const dominantAxisThreshold = browser === 'chrome' ? dominantAxisThresholdChrome : dominantAxisThresholdFirefox;
 
         if (isFastMotion && !isFlipping) {
             const magnitude = Math.sqrt(deltaX * deltaX + deltaY * deltaY + deltaZ * deltaZ);
 
             const isDominantAxisMotion = browser === 'chrome' &&
-                (Math.abs(deltaX) > magnitude * 0.8 ||
-                 Math.abs(deltaY) > magnitude * 0.8 ||
-                 Math.abs(deltaZ) > magnitude * 0.8);
+                (Math.abs(deltaX) > magnitude * dominantAxisThreshold ||
+                 Math.abs(deltaY) > magnitude * dominantAxisThreshold ||
+                 Math.abs(deltaZ) > magnitude * dominantAxisThreshold);
 
             if (magnitude > minFlipMagnitude && !isDominantAxisMotion) {
                 motionRef.current = { ...motionRef.current, isFlipping: true };
@@ -409,7 +414,7 @@ function App() {
             <div className="last-flip">
                 {lastFlipMagnitude > 0 && <p>Last Flip Magnitude: {lastFlipMagnitude.toFixed(2)}</p>}
             </div>
-             {!isGameActive && !isGameOver && (
+            {!isGameActive && !isGameOver && (
                 <div className="sensitivity-control">
                     <label htmlFor="sensitivity">Sensitivity:</label>
                     <input
@@ -445,7 +450,7 @@ function App() {
                 </div>
             )}
 
-             {isFlippingAnimation && <div className="flip-animation"></div>}
+            {isFlippingAnimation && <div className="flip-animation"></div>}
         </div>
     );
 }
