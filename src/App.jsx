@@ -328,7 +328,7 @@ function App() {
                 setLastFlipMagnitude(magnitude);
 
                 if (typeof navigator.vibrate === 'function') {
-                    navigator.vibrate(50);
+                    navigator.vibrate(100);
                 }
 
                 setIsCoolingDown(true);
