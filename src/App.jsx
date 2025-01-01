@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import useSound from 'use-sound';
-import { FaPlay, FaRedo, FaPause, FaQuestionCircle } from 'react-icons/fa';
+import { FaPlay, FaRedo, FaQuestionCircle } from 'react-icons/fa';
 import flipSound from './assets/flip.mp3';
 import './App.css';
 import { createClient } from '@supabase/supabase-js';
@@ -36,7 +36,6 @@ function App() {
     const [timeLeft, setTimeLeft] = useState(10);
     const [scoreAnimation, setScoreAnimation] = useState(null);
     const [isGameOver, setIsGameOver] = useState(false);
-    const [isPaused, setIsPaused] = useState(false);
     const [showTutorial, setShowTutorial] = useState(false);
     const [scoreMultiplier, setScoreMultiplier] = useState(1);
     const [flipStreak, setFlipStreak] = useState(0);
@@ -57,7 +56,7 @@ function App() {
 
     useEffect(() => {
         let eventListener = null;
-        if (isMotionActive && isGameActive && !isPaused) {
+        if (isMotionActive && isGameActive) {
             eventListener = (event) => {
                 handleDeviceMotion(event);
             };
@@ -68,11 +67,11 @@ function App() {
                 window.removeEventListener('devicemotion', eventListener);
             }
         };
-    }, [isMotionActive, isGameActive, browser, isPaused]);
+    }, [isMotionActive, isGameActive, browser]);
 
     useEffect(() => {
         let timer;
-        if (isGameActive && timeLeft > 0 && !isPaused) {
+        if (isGameActive && timeLeft > 0) {
             timer = setInterval(() => {
                 setTimeLeft(prevTime => prevTime - 1);
             }, 1000);
@@ -82,7 +81,7 @@ function App() {
             setIsGameOver(true);
         }
         return () => clearInterval(timer);
-    }, [isGameActive, timeLeft, isPaused]);
+    }, [isGameActive, timeLeft]);
 
     useEffect(() => {
         if (score > highScore) {
@@ -124,21 +123,59 @@ function App() {
             setScoreboard(data);
         }
     };
-
     const saveScore = async () => {
-        const { data, error } = await supabase
-            .from('scores')
-            .upsert(
-                [{ username: username.trim(), score: score, created_at: new Date() }],
-                { onConflict: 'username' }
-            );
-
-        if (error) {
-            console.error('Error saving or updating score:', error);
-        } else {
-            console.log('Score saved or updated successfully:', data);
-        }
-    };
+      const trimmedUsername = username.trim();
+      if (!trimmedUsername) {
+          console.error("Username is empty.");
+          return;
+      }
+  
+      try {
+          // Check if a score already exists for this username
+          const { data: existingScoreData, error: fetchError } = await supabase
+              .from('scores')
+              .select('score')
+              .eq('username', trimmedUsername)
+              .single(); // Use .single() to get a single record or null
+  
+          if (fetchError) {
+              console.error("Error fetching existing score:", fetchError);
+              return;
+          }
+  
+          if (existingScoreData) {
+              // A score exists, compare with the new score
+              if (score > existingScoreData.score) {
+                  // New score is higher, update the existing record
+                  const { data, error: updateError } = await supabase
+                      .from('scores')
+                      .update({ score: score, created_at: new Date() })
+                      .eq('username', trimmedUsername);
+  
+                  if (updateError) {
+                      console.error("Error updating score:", updateError);
+                  } else {
+                      console.log("Score updated successfully:", data);
+                  }
+              } else {
+                  console.log("New score is not higher than existing score. Not updating.");
+              }
+          } else {
+              // No existing score, insert a new record
+              const { data, error: insertError } = await supabase
+                  .from('scores')
+                  .insert([{ username: trimmedUsername, score: score, created_at: new Date() }]);
+  
+              if (insertError) {
+                  console.error("Error saving new score:", insertError);
+              } else {
+                  console.log("New score saved successfully:", data);
+              }
+          }
+      } catch (error) {
+          console.error("An unexpected error occurred:", error);
+      }
+  };
 
     const handleStartGame = async () => {
         if (!username.trim()) {
@@ -176,7 +213,6 @@ function App() {
         setIsGameActive(false);
         setIsMotionActive(false);
         setIsGameOver(false);
-        setIsPaused(false);
         setTimeLeft(10);
         setScore(0);
         setScoreMultiplier(1);
@@ -192,12 +228,8 @@ function App() {
         };
     };
 
-    const handlePause = () => {
-        setIsPaused(!isPaused);
-    };
-
     const handleDeviceMotion = useCallback((event) => {
-        if (isCoolingDown || !isGameActive || isPaused) {
+        if (isCoolingDown || !isGameActive) {
             return;
         }
 
@@ -312,7 +344,7 @@ function App() {
 
         setMotionData({ x, y, z });
         motionRef.current = { ...motionRef.current, previousAcceleration: { x, y, z } };
-    }, [browser, coolDownDuration, isCoolingDown, isGameActive, isPaused, play, scoreMultiplier, sensitivity, flipStreak]);
+    }, [browser, coolDownDuration, isCoolingDown, isGameActive, play, scoreMultiplier, sensitivity, flipStreak]);
 
     return (
         <div className="app-container">
@@ -355,14 +387,6 @@ function App() {
             {isGameActive && (
                 <div className="game-controls">
                     <div className="timer">Time Left: {timeLeft}s</div>
-                </div>
-            )}
-
-            {!isGameActive && !isGameOver && (
-                <div className="game-controls">
-                    <button onClick={handlePause} className="action-button">
-                        {isPaused ? <FaPlay /> : <FaPause />} {isPaused ? 'Resume' : 'Pause'}
-                    </button>
                 </div>
             )}
 
@@ -409,7 +433,7 @@ function App() {
                 </div>
             )}
 
-            {isGameActive && !isPaused && (
+            {isGameActive && (
                 <div className="motion-data">
                     <p>X: {motionData.x?.toFixed(2) ?? 0}</p>
                     <p>Y: {motionData.y?.toFixed(2) ?? 0}</p>
