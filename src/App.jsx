@@ -141,7 +141,7 @@ function App() {
   
       console.log("Existing score data:", existingScoreData, "Error:", existingScoreError);
   
-      if (existingScoreError && existingScoreError.code !== 'PGRST116') { // Handle other errors
+      if (existingScoreError && existingScoreError.code !== 'PGRST116') {
           console.error("Error checking for existing score:", existingScoreError);
           return;
       }
@@ -149,14 +149,15 @@ function App() {
       if (existingScoreData) {
           if (score > existingScoreData.score) {
               console.log("Current score:", score, "Existing score:", existingScoreData.score, "Updating score...");
-              const { error: updateError } = await supabase
+              const { data: updateData, error: updateError } = await supabase
                   .from('scores')
                   .update({ score: score, created_at: new Date() })
                   .eq('username', trimmedUsername);
   
               if (updateError) {
-                  console.error("Error updating score:", updateError);
+                  console.error("Error updating score:", updateError);  // <---- ADD THIS LINE
               } else {
+                  console.log("Score updated successfully:", updateData); // Optional: Log success data
                   console.log(`Updated score for user ${trimmedUsername} to ${score}`);
               }
           } else {
