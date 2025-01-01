@@ -23,7 +23,7 @@ function App() {
         isFlipping: false,
         initialBias: { x: 0, y: 0, z: 0 },
     });
-    const [motionData, setMotionData] = useState({ x: 0, y: 0, z: 0 });
+    const [motionData, setMotionData] = useState({ x: 0, y: 0, z: 0, alpha: 0, beta: 0, gamma: 0 });
     const [browser, setBrowser] = useState('');
     const [isDeviceMotionSupported, setIsDeviceMotionSupported] = useState(false);
     const [score, setScore] = useState(0);
@@ -199,11 +199,16 @@ function App() {
             return;
         }
         if (typeof DeviceMotionEvent.requestPermission === 'function') {
-            const permissionState = await DeviceMotionEvent.requestPermission();
-            if (permissionState === 'granted') {
-                startGame();
-            } else {
-                alert('Device motion permission not granted.');
+            try {
+                const permissionState = await DeviceMotionEvent.requestPermission();
+                if (permissionState === 'granted') {
+                    startGame();
+                } else {
+                    alert('Device motion permission not granted.');
+                }
+            } catch (error) {
+                console.error("Error requesting device motion permission:", error);
+                alert('Could not get device motion permission.');
             }
         } else {
             startGame();
@@ -246,37 +251,31 @@ function App() {
         }
 
         let accelerationData;
-        if (browser === 'chrome') {
-            accelerationData = event.acceleration;
-        } else if (browser === 'firefox') {
-            accelerationData = event.accelerationIncludingGravity;
+        let rotationRateData;
+
+        if (event.acceleration) {
+            accelerationData = browser === 'firefox' ? event.accelerationIncludingGravity : event.acceleration;
+        }
+
+        if (event.rotationRate) {
+            rotationRateData = event.rotationRate;
         }
 
         if (!accelerationData || (!accelerationData.x && !accelerationData.y && !accelerationData.z)) {
             console.error("No valid acceleration data available.");
-            setMotionData({ x: 0, y: 0, z: 0 });
+            setMotionData(prev => ({ ...prev, x: 0, y: 0, z: 0 }));
+            return;
+        }
+
+        if (!rotationRateData || (!rotationRateData.alpha && !rotationRateData.beta && !rotationRateData.gamma)) {
+            console.error("No valid rotation rate data available.");
             return;
         }
 
         let { x, y, z } = accelerationData;
+        let { alpha, beta, gamma } = rotationRateData;
 
-        if (browser === 'firefox' && event.accelerationIncludingGravity) {
-            const gravity = 9.81;
-            const norm = Math.sqrt(
-                Math.pow(event.accelerationIncludingGravity.x, 2) +
-                Math.pow(event.accelerationIncludingGravity.y, 2) +
-                Math.pow(event.accelerationIncludingGravity.z, 2)
-            );
-            if (norm > 0) {
-                x = accelerationData.x - (event.accelerationIncludingGravity.x / norm) * gravity;
-                y = accelerationData.y - (event.accelerationIncludingGravity.y / norm) * gravity;
-                z = accelerationData.z - (event.accelerationIncludingGravity.z / norm) * gravity;
-            }
-        } else if (browser === 'chrome' && event.acceleration) {
-            x = event.acceleration.x;
-            y = event.acceleration.y;
-            z = event.acceleration.z;
-        }
+        const isRotatingFast = Math.abs(alpha) > 100 || Math.abs(beta) > 100 || Math.abs(gamma) > 100;
 
         const { initialBias, previousAcceleration, isFlipping } = motionRef.current;
 
@@ -290,7 +289,7 @@ function App() {
             return;
         }
 
-        const baseThresholdChrome = 10; // Increased threshold for Chrome
+        const baseThresholdChrome = 10;
         const baseThresholdFirefox = 8;
         const baseThreshold = browser === 'chrome' ? baseThresholdChrome : baseThresholdFirefox;
 
@@ -308,19 +307,22 @@ function App() {
             Math.abs(deltaZ) > thresholdZ;
 
         const minFlipMagnitude = 5;
-        const dominantAxisThresholdChrome = 0.7; // More restrictive for Chrome
-        const dominantAxisThresholdFirefox = 0.8;
-        const dominantAxisThreshold = browser === 'chrome' ? dominantAxisThresholdChrome : dominantAxisThresholdFirefox;
+        const dominantAxisThreshold = 0.7;
 
-        if (isFastMotion && !isFlipping) {
+        if (isFastMotion && !isFlipping && isRotatingFast) {
             const magnitude = Math.sqrt(deltaX * deltaX + deltaY * deltaY + deltaZ * deltaZ);
 
-            const isDominantAxisMotion = browser === 'chrome' &&
-                (Math.abs(deltaX) > magnitude * dominantAxisThreshold ||
-                 Math.abs(deltaY) > magnitude * dominantAxisThreshold ||
-                 Math.abs(deltaZ) > magnitude * dominantAxisThreshold);
+            const absDeltaX = Math.abs(deltaX);
+            const absDeltaY = Math.abs(deltaY);
+            const absDeltaZ = Math.abs(deltaZ);
+            const sumAbsDeltas = absDeltaX + absDeltaY + absDeltaZ;
 
-            if (magnitude > minFlipMagnitude && !isDominantAxisMotion) {
+            const isDominantAxisMotion = sumAbsDeltas > 0 &&
+                (absDeltaX / sumAbsDeltas > dominantAxisThreshold ||
+                 absDeltaY / sumAbsDeltas > dominantAxisThreshold ||
+                 absDeltaZ / sumAbsDeltas > dominantAxisThreshold);
+
+            if (magnitude > minFlipMagnitude && isDominantAxisMotion) {
                 motionRef.current = { ...motionRef.current, isFlipping: true };
                 play();
                 setIsFlippingAnimation(true);
@@ -354,7 +356,7 @@ function App() {
             }
         }
 
-        setMotionData({ x, y, z });
+        setMotionData({ x, y, z, alpha, beta, gamma });
         motionRef.current = { ...motionRef.current, previousAcceleration: { x, y, z } };
     }, [browser, coolDownDuration, isCoolingDown, isGameActive, play, scoreMultiplier, sensitivity, flipStreak]);
 
@@ -450,6 +452,9 @@ function App() {
                     <p>X: {motionData.x?.toFixed(2) ?? 0}</p>
                     <p>Y: {motionData.y?.toFixed(2) ?? 0}</p>
                     <p>Z: {motionData.z?.toFixed(2) ?? 0}</p>
+                    <p>α (Rotation Z): {motionData.alpha?.toFixed(2) ?? 0}</p>
+                    <p>β (Rotation X): {motionData.beta?.toFixed(2) ?? 0}</p>
+                    <p>γ (Rotation Y): {motionData.gamma?.toFixed(2) ?? 0}</p>
                 </div>
             )}
             <div className="last-flip">
