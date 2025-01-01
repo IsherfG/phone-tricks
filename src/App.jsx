@@ -31,7 +31,7 @@ function App() {
     const [lastFlipMagnitude, setLastFlipMagnitude] = useState(0);
     const [sensitivity, setSensitivity] = useState(1);
     const [isCoolingDown, setIsCoolingDown] = useState(false);
-    const coolDownDuration = 200; // Reduced cooldown for potential multiple flips
+    const coolDownDuration = 300;
     const [isGameActive, setIsGameActive] = useState(false);
     const [timeLeft, setTimeLeft] = useState(10);
     const [scoreAnimation, setScoreAnimation] = useState(null);
@@ -42,10 +42,6 @@ function App() {
     const [isFlippingAnimation, setIsFlippingAnimation] = useState(false);
     const [scoreboard, setScoreboard] = useState([]);
     const [isScoreboardLoading, setIsScoreboardLoading] = useState(false);
-    const [flipSequenceCount, setFlipSequenceCount] = useState(0);
-    const lastFlipTime = useRef(null);
-    const flipSequenceTimeout = useRef(null);
-    const flipSequenceWindow = 750; // milliseconds
 
     useEffect(() => {
         setIsDeviceMotionSupported(typeof DeviceMotionEvent !== 'undefined');
@@ -105,6 +101,7 @@ function App() {
                     await fetchScoreboard();
                 } catch (error) {
                     console.error("Error updating scoreboard:", error);
+                    // Handle error, maybe show a message to the user
                 } finally {
                     setIsScoreboardLoading(false);
                 }
@@ -126,56 +123,59 @@ function App() {
             setScoreboard(data);
         }
     };
-
     const saveScore = async () => {
-        const trimmedUsername = username.trim();
-        if (!trimmedUsername) {
-            console.error("Username is empty.");
-            return;
-        }
-
-        try {
-            const { data: existingScoreData, error: fetchError } = await supabase
-                .from('scores')
-                .select('score')
-                .eq('username', trimmedUsername)
-                .single();
-
-            if (fetchError) {
-                console.error("Error fetching existing score:", fetchError);
-                return;
-            }
-
-            if (existingScoreData) {
-                if (score > existingScoreData.score) {
-                    const { data, error: updateError } = await supabase
-                        .from('scores')
-                        .update({ score: score, created_at: new Date() })
-                        .eq('username', trimmedUsername);
-
-                    if (updateError) {
-                        console.error("Error updating score:", updateError);
-                    } else {
-                        console.log("Score updated successfully:", data);
-                    }
-                } else {
-                    console.log("New score is not higher than existing score. Not updating.");
-                }
-            } else {
-                const { data, error: insertError } = await supabase
-                    .from('scores')
-                    .insert([{ username: trimmedUsername, score: score, created_at: new Date() }]);
-
-                if (insertError) {
-                    console.error("Error saving new score:", insertError);
-                } else {
-                    console.log("New score saved successfully:", data);
-                }
-            }
-        } catch (error) {
-            console.error("An unexpected error occurred:", error);
-        }
-    };
+      const trimmedUsername = username.trim();
+      if (!trimmedUsername) {
+          console.error("Username is empty.");
+          return;
+      }
+  
+      try {
+          // Check if a score already exists for this username
+          const { data: existingScoreData, error: fetchError } = await supabase
+              .from('scores')
+              .select('score')
+              .eq('username', trimmedUsername)
+              .single(); // Use .single() to get a single record or null
+  
+          if (fetchError) {
+              console.error("Error fetching existing score:", fetchError);
+              return;
+          }
+  
+          if (existingScoreData) {
+              // A score exists, compare with the new score
+              if (score > existingScoreData.score) {
+                  // New score is higher, update the existing record
+                  const { data, error: updateError } = await supabase
+                      .from('scores')
+                      .update({ score: score, created_at: new Date() })
+                      .eq('username', trimmedUsername);
+  
+                  if (updateError) {
+                      console.error("Error updating score:", updateError);
+                  } else {
+                      console.log("Score updated successfully:", data);
+                  }
+              } else {
+                  console.log("New score is not higher than existing score. Not updating.");
+              }
+          } else {
+              // No existing score, insert a new record
+              const { data, error: insertError } = await supabase
+                  .from('scores')
+                  .insert([{ username: trimmedUsername, score: score, created_at: new Date() }]);
+  
+              if (insertError) {
+                  console.error("Error saving new score:", insertError);
+              } else {
+                  console.log("New score saved successfully:", data);
+              }
+          }
+      } catch (error) {
+          console.error("An unexpected error occurred:", error);
+      }
+  };
 
     const handleStartGame = async () => {
         if (!username.trim()) {
@@ -206,9 +206,6 @@ function App() {
         setScore(0);
         setScoreMultiplier(1);
         setFlipStreak(0);
-        setFlipSequenceCount(0);
-        lastFlipTime.current = null;
-        clearTimeout(flipSequenceTimeout.current);
         motionRef.current = { ...motionRef.current, initialBias: { x: 0, y: 0, z: 0 } };
     };
 
@@ -224,9 +221,6 @@ function App() {
         setScoreAnimation(null);
         setIsFlippingAnimation(false);
         setScoreboard([]);
-        setFlipSequenceCount(0);
-        lastFlipTime.current = null;
-        clearTimeout(flipSequenceTimeout.current);
         motionRef.current = {
             previousAcceleration: null,
             isFlipping: false,
@@ -234,29 +228,8 @@ function App() {
         };
     };
 
-    const updateScore = useCallback((baseMagnitude) => {
-        let currentScoreIncrement = Math.round(baseMagnitude * scoreMultiplier);
-        if (flipSequenceCount === 2) {
-            currentScoreIncrement *= 2; // Double flip bonus
-        } else if (flipSequenceCount >= 3) {
-            currentScoreIncrement *= 3; // Triple or more flip bonus
-        }
-
-        setScore(prevScore => {
-            setScoreAnimation({
-                value: currentScoreIncrement,
-                timestamp: Date.now()
-            });
-            return prevScore + currentScoreIncrement;
-        });
-        setLastFlipMagnitude(baseMagnitude);
-        if (typeof navigator.vibrate === 'function') {
-            navigator.vibrate(50);
-        }
-    }, [scoreMultiplier, flipSequenceCount]);
-
     const handleDeviceMotion = useCallback((event) => {
-        if (!isGameActive) {
+        if (isCoolingDown || !isGameActive) {
             return;
         }
 
@@ -305,7 +278,7 @@ function App() {
             return;
         }
 
-        const baseThresholdChrome = 10;
+        const baseThresholdChrome = 10; // Increased threshold for Chrome
         const baseThresholdFirefox = 8;
         const baseThreshold = browser === 'chrome' ? baseThresholdChrome : baseThresholdFirefox;
 
@@ -323,7 +296,7 @@ function App() {
             Math.abs(deltaZ) > thresholdZ;
 
         const minFlipMagnitude = 5;
-        const dominantAxisThresholdChrome = 0.7;
+        const dominantAxisThresholdChrome = 0.7; // More restrictive for Chrome
         const dominantAxisThresholdFirefox = 0.8;
         const dominantAxisThreshold = browser === 'chrome' ? dominantAxisThresholdChrome : dominantAxisThresholdFirefox;
 
@@ -337,42 +310,31 @@ function App() {
 
             if (magnitude > minFlipMagnitude && !isDominantAxisMotion) {
                 motionRef.current = { ...motionRef.current, isFlipping: true };
+                play();
                 setIsFlippingAnimation(true);
                 setTimeout(() => setIsFlippingAnimation(false), 200);
 
-                const now = Date.now();
+                setFlipStreak(prevStreak => prevStreak + 1);
+                setScoreMultiplier(Math.min(3, Math.floor(flipStreak / 3) + 1));
 
-                if (!lastFlipTime.current || (now - lastFlipTime.current < flipSequenceWindow)) {
-                    setFlipSequenceCount(prevCount => prevCount + 1);
-                    lastFlipTime.current = now;
+                const scoreIncrement = Math.round(magnitude * scoreMultiplier);
+                setScore(prevScore => {
+                    setScoreAnimation({
+                        value: scoreIncrement,
+                        timestamp: Date.now()
+                    });
+                    return prevScore + scoreIncrement;
+                });
+                setLastFlipMagnitude(magnitude);
 
-                    clearTimeout(flipSequenceTimeout.current);
-                    flipSequenceTimeout.current = setTimeout(() => {
-                        if (flipSequenceCount >= 1) {
-                            play();
-                            updateScore(magnitude);
-                            setFlipStreak(prevStreak => prevStreak + 1);
-                            setScoreMultiplier(Math.min(3, Math.floor(flipStreak / 3) + 1));
-                        }
-                        setFlipSequenceCount(0);
-                        lastFlipTime.current = null;
-                    }, flipSequenceWindow);
-                } else {
-                    clearTimeout(flipSequenceTimeout.current);
-                    setFlipSequenceCount(1);
-                    lastFlipTime.current = now;
-                    play();
-                    updateScore(magnitude);
-                    setFlipStreak(prevStreak => prevStreak + 1);
-                    setScoreMultiplier(Math.min(3, Math.floor(flipStreak / 3) + 1));
-                    flipSequenceTimeout.current = setTimeout(() => {
-                        setFlipSequenceCount(0);
-                        lastFlipTime.current = null;
-                    }, flipSequenceWindow);
+                if (typeof navigator.vibrate === 'function') {
+                    navigator.vibrate(100);
                 }
 
+                setIsCoolingDown(true);
                 setTimeout(() => {
                     motionRef.current = { ...motionRef.current, isFlipping: false };
+                    setIsCoolingDown(false);
                 }, coolDownDuration);
             } else {
                 setFlipStreak(0);
@@ -382,7 +344,7 @@ function App() {
 
         setMotionData({ x, y, z });
         motionRef.current = { ...motionRef.current, previousAcceleration: { x, y, z } };
-    }, [browser, coolDownDuration, flipSequenceWindow, play, scoreMultiplier, sensitivity, updateScore, flipStreak]);
+    }, [browser, coolDownDuration, isCoolingDown, isGameActive, play, scoreMultiplier, sensitivity, flipStreak]);
 
     return (
         <div className="app-container">
@@ -404,8 +366,6 @@ function App() {
                     </span>
                     {scoreMultiplier > 1 && <span className="multiplier">x{scoreMultiplier}</span>}
                     {flipStreak > 2 && <span className="streak">🔥</span>}
-                    {flipSequenceCount === 2 && <span className="double-flip">Double Flip!</span>}
-                    {flipSequenceCount >= 3 && <span className="triple-flip">Triple Flip!</span>}
                 </div>
             </div>
 
@@ -512,7 +472,6 @@ function App() {
                         <p>Flip your device in the air to score points.</p>
                         <p>The faster and cleaner the flip, the more points you get.</p>
                         <p>Build up a streak of successful flips for a score multiplier!</p>
-                        <p>Perform multiple flips in quick succession for even bigger bonuses!</p>
                         <button onClick={() => setShowTutorial(false)} className="action-button">
                             Got it!
                         </button>
