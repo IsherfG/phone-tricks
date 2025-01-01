@@ -3,7 +3,7 @@ import useSound from 'use-sound';
 import { FaPlay, FaRedo, FaPause, FaQuestionCircle } from 'react-icons/fa';
 import flipSound from './assets/flip.mp3';
 import './App.css';
-import { createClient } from '@supabase/supabase-js';
+import { createClient } from '@supabase/supabase-js'; 
 
 // Initialize Supabase client
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
@@ -190,6 +190,7 @@ function App() {
     const handlePause = () => {
         setIsPaused(!isPaused);
     };
+    
 
     const handleDeviceMotion = useCallback((event) => {
         if (isCoolingDown || !isGameActive || isPaused) {
